@@ -13,6 +13,11 @@ To use in a YAML pipeline:
 
 ## Development Guide
 
+### Prepare Environment
+```bash
+npm install
+```
+
 ### Build
 ```bash
 tsc
