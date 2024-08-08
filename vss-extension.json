@@ -1,0 +1,50 @@
+{
+    "manifestVersion": 1,
+    "id": "codespell",
+    "publisher": "rhyskoedijk",
+    "version": "1.0.3",
+    "name": "Codespell",
+    "description": "Fix common misspellings in your source code",
+    "public": false,
+    "categories": [
+        "Azure Pipelines"
+    ],
+    "targets": [
+        {
+            "id": "Microsoft.VisualStudio.Services"
+        }
+    ],
+    "icons": {
+        "default": "images/icon.png"
+    },
+    "links": {
+        "support": { 
+            "uri": "https://github.com/rhyskoedijk/codespell-azure-devops/issues" 
+        }
+    },
+    "repository": {
+        "type": "git",
+        "uri": "https://github.com/rhyskoedijk/codespell-azure-devops"
+    },
+    "files": [
+        {
+            "path": "task"
+        },
+        {
+            "path": "images",
+            "addressable": true
+        }
+    ],
+    "contributions": [
+        {
+            "id": "codespell",
+            "type": "ms.vss-distributed-task.task",
+            "targets": [
+                "ms.vss-distributed-task.tasks"
+            ],
+            "properties": {
+                "name": "task"
+            }
+        }
+    ]
+}

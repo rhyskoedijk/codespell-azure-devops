@@ -1,0 +1,23 @@
+{
+  "name": "codespell-azure-devops",
+  "version": "1.0.0",
+  "description": "Codespell Azure DevOps Extension",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "package": "tfx extension create --manifest-globs vss-extension.json --rev-version",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "azure-pipelines-task-lib": "^4.15.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^22.1.0",
+    "@types/q": "^1.5.8",
+    "sync-request": "^6.1.0"
+  }
+}
