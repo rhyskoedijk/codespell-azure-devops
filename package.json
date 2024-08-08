@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "package": "tfx extension create --manifest-globs vss-extension.json --rev-version",
+    "package": "npx tfx-cli extension create --manifest-globs vss-extension.json --rev-version",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
