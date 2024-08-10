@@ -5,31 +5,50 @@ import { AzureDevOpsClient, IFileCorrection } from "./services/azure_devops_clie
 async function run() {
     try {
 
-        let isDebug = tl.getBoolInput("System.Debug", false);
+        let commitChanges = tl.getBoolInput("commitChanges", false);
+        let suggestChanges = tl.getBoolInput("suggestChanges", false);
+        let failOnMisspelling = tl.getBoolInput("failOnMisspelling", false);
+
+        let debug = tl.getVariable("System.Debug")?.toLowerCase() === "true";
+
+        let accessToken = tl.getVariable("System.AccessToken");
+        if (!accessToken) {
+            throw new Error("Required variable 'System.AccessToken' is not set");
+        }
 
         let organizationUri = tl.getVariable("System.CollectionUri");
         if (!organizationUri) {
-            throw new Error("'System.CollectionUri' is not set");
+            throw new Error("Required variable 'System.CollectionUri' is not set");
         }
 
         let project = tl.getVariable("System.TeamProject");
         if (!project) {
-            throw new Error("'System.TeamProject' is not set");
+            throw new Error("Required variable 'System.TeamProject' is not set");
         }
 
         let repositoryId = tl.getVariable("Build.Repository.ID");
         if (!repositoryId) {
-            throw new Error("'Build.Repository.ID' is not set");
-        }
-
-        let accessToken = tl.getVariable("System.AccessToken");
-        if (!accessToken) {
-            throw new Error("'System.AccessToken' is not set");
+            throw new Error("Required variable 'Build.Repository.ID' is not set");
         }
 
         let pullRequestId = parseInt(tl.getVariable("System.PullRequest.PullRequestId") || "0");
         if (pullRequestId > 0) {
-            console.log('Running for PR #', pullRequestId);
+            if (commitChanges) {
+                console.log(`Any misspelling suggestions will be committed directly to PR #${pullRequestId}`);
+            } else if (suggestChanges) {
+                console.log(`Any misspelling suggestions will be raised as comments in PR #${pullRequestId}`);
+            }
+        }
+
+        let ado: AzureDevOpsClient = new AzureDevOpsClient(organizationUri, project, repositoryId, accessToken);
+
+        // Process any user commands found in pull request comments (e.g. "@codespell ignore this") 
+        // This ensures that `.codespellrc` is up to date before we run codespell
+        if (pullRequestId > 0 && suggestChanges) {
+            console.log(`Processing user commands in PR comments...`);
+            await ado.processUserCommandsInPullRequest({
+                pullRequestId: pullRequestId
+            });
         }
 
         // Install codespell if not already installed
@@ -38,21 +57,25 @@ async function run() {
             let pipRunner: ToolRunner = tl.tool(tl.which("pip", true));
             pipRunner.arg(["install", "codespell"]);
             pipRunner.execSync({
-                silent: !isDebug
-            })
-
+                silent: !debug
+            });
         }
 
         // Run codespell
         console.log('Running codespell...');
         let codeSpellRunner: ToolRunner = tl.tool(tl.which("codespell", true));
-        codeSpellRunner.arg(["--check-filenames", "-C", "0"]);
+        let codeSpellArguments = ["--quiet-level", "0", "--context", "0", "--hard-encoding-detection"];
+        if (commitChanges) {
+            codeSpellArguments.push("--write-changes");
+        }
+        codeSpellRunner.arg(codeSpellArguments);
         let codeSpellResult = codeSpellRunner.execSync({
-            silent: !isDebug
+            silent: !debug
         })
+        console.debug(`codespell exited with code ${codeSpellResult.code}.`);
 
-        // Parse codespell corrections
-        let lastLine = '';
+        // Parse codespell output
+        let lineContext = '';
         let corrections: IFileCorrection[] = [];
         codeSpellResult.stdout.split(/[\r\n]+/).forEach((line: string) => {
             let match = line.match(/(.*):(\d+):(.*)==>(.*)/);
@@ -60,24 +83,40 @@ async function run() {
                 corrections.push({
                     file: match[1].trim().replace(/^\.+/g, ""),
                     lineNumber: parseInt(match[2]),
-                    lineText: lastLine.substring(1),
+                    lineText: lineContext.substring(1),
                     word: match[3].trim(),
                     suggestions: match[4].trim().split(',').map(s => s.trim())
                 });
             }
-            lastLine = line;
+            lineContext = line;
         });
 
-        console.debug('Detected corrections:', corrections);
+        // Tell the user what we found
+        console.info(`Found ${corrections.length} misspellings.`);
+        console.info(corrections.map(c => `${c.file}:${c.lineNumber} ${c.word} ==> ${c.suggestions.join(", ")}`).join("\n"));
 
-        // Process codespell corrections
-        if (pullRequestId > 0) {
-            let ado: AzureDevOpsClient = new AzureDevOpsClient(organizationUri, project, repositoryId, accessToken);
-            await ado.processCorrectionsForPullRequest({
-                pullRequestId: pullRequestId,
-                corrections: corrections
-            });
+        // If anything was found, commit or suggest corrections on the PR (if configured)
+        if (corrections.length > 0 && pullRequestId > 0) {
+            if (commitChanges) {
+                console.log(`Committing codespell corrections to PR...`);
+                await ado.commitCorrectionsToPullRequest({
+                    pullRequestId: pullRequestId,
+                    corrections: corrections
+                });
+
+            } else if (suggestChanges) {
+                console.log(`Suggesting codespell corrections to PR...`);
+                await ado.suggestCorrectionsToPullRequest({
+                    pullRequestId: pullRequestId,
+                    corrections: corrections
+                });
+            }
         }
+
+        tl.setResult(
+            (corrections.length === 0 || !failOnMisspelling) ? tl.TaskResult.Succeeded : tl.TaskResult.Failed,
+            `Found ${corrections.length} misspellings.`
+        );
     }
     catch (err: any) {
         tl.setResult(tl.TaskResult.Failed, err.message);

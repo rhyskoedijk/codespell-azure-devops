@@ -15,12 +15,28 @@
     "instanceNameFormat": "Echo $(samplestring)",
     "inputs": [
         {
-            "name": "samplestring",
-            "type": "string",
-            "label": "Sample String",
-            "defaultValue": "",
-            "required": true,
-            "helpMarkDown": "A sample string"
+            "name": "commitChanges",
+            "type": "boolean",
+            "label": "Commit changes",
+            "defaultValue": false,
+            "required": false,
+            "helpMarkDown": "Commit changes"
+        },
+        {
+            "name": "suggestChanges",
+            "type": "boolean",
+            "label": "Suggest changes",
+            "defaultValue": false,
+            "required": false,
+            "helpMarkDown": "Suggest changes"
+        },
+        {
+            "name": "failOnMisspelling",
+            "type": "boolean",
+            "label": "Fail if any misspellings are found",
+            "defaultValue": false,
+            "required": false,
+            "helpMarkDown": "Fail if any misspellings are found"
         }
     ],
     "execution": {
