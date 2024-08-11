@@ -1,6 +1,7 @@
 import * as tl from "azure-pipelines-task-lib/task"
+import { debug, warning, error } from "azure-pipelines-task-lib/task"
 import { ToolRunner } from "azure-pipelines-task-lib/toolrunner"
-import { AzureDevOpsClient, IFile, IFileCorrection } from "./services/azure_devops_client";
+import { AzureDevOpsClient, IFile, IFileCorrection } from "./services/azureDevOpsClient";
 import fs from "fs";
 
 async function run() {
@@ -10,12 +11,7 @@ async function run() {
         let suggestChanges = tl.getBoolInput("suggestChanges", false);
         let failOnMisspelling = tl.getBoolInput("failOnMisspelling", false);
 
-        let debug = tl.getVariable("System.Debug")?.toLowerCase() === "true";
-
-        let accessToken = tl.getVariable("System.AccessToken");
-        if (!accessToken) {
-            throw new Error("Required variable 'System.AccessToken' is not set");
-        }
+        let isDebug = tl.getVariable("System.Debug")?.toLowerCase() === "true";
 
         let organizationUri = tl.getVariable("System.CollectionUri");
         if (!organizationUri) {
@@ -35,18 +31,18 @@ async function run() {
         let pullRequestId = parseInt(tl.getVariable("System.PullRequest.PullRequestId") || "0");
         if (pullRequestId > 0) {
             if (commitChanges) {
-                console.log(`Any misspelling suggestions will be committed directly to PR #${pullRequestId}`);
+                console.info(`Any misspelling suggestions will be committed directly to PR #${pullRequestId}`);
             } else if (suggestChanges) {
-                console.log(`Any misspelling suggestions will be raised as comments in PR #${pullRequestId}`);
+                console.info(`Any misspelling suggestions will be raised as comments in PR #${pullRequestId}`);
             }
         }
 
-        let ado: AzureDevOpsClient = new AzureDevOpsClient(organizationUri, project, repositoryId, accessToken);
+        let ado: AzureDevOpsClient = new AzureDevOpsClient(organizationUri, project, repositoryId);
 
         // Process any user commands found in pull request comments (e.g. "@codespell ignore this") 
         // This ensures that `.codespellrc` is up to date before we run codespell
         if (pullRequestId > 0 && suggestChanges) {
-            console.log(`Processing user commands in PR comments...`);
+            console.info("Checking PR comments for new commands that need processing...");
             await ado.processUserCommandsInPullRequest({
                 pullRequestId: pullRequestId
             });
@@ -54,26 +50,26 @@ async function run() {
 
         // Install codespell if not already installed
         if (!tl.which("codespell", false)) {
-            console.log('Codespell was not found, installing now...');
+            debug("Codespell was not found, installing via `pip install`...");
             let pipRunner: ToolRunner = tl.tool(tl.which("pip", true));
-            pipRunner.arg(["install", "codespell"]);
+            pipRunner.arg(["install", "codespell", "chardet"]);
             pipRunner.execSync({
-                silent: !debug
+                silent: !isDebug
             });
         }
 
         // Run codespell
-        console.log('Running codespell...');
+        console.info("Running codespell...");
         let codeSpellRunner: ToolRunner = tl.tool(tl.which("codespell", true));
-        let codeSpellArguments = ["--quiet-level", "0", "--context", "0", "--hard-encoding-detection"];
+        let codeSpellArguments = ["--quiet-level", "2", "--context", "0", "--hard-encoding-detection"];
         if (commitChanges) {
             codeSpellArguments.push("--write-changes");
         }
         codeSpellRunner.arg(codeSpellArguments);
         let codeSpellResult = codeSpellRunner.execSync({
-            silent: !debug
+            silent: !isDebug
         })
-        console.debug(`codespell exited with code ${codeSpellResult.code}.`);
+        debug(`codespell exited with code ${codeSpellResult.code}.`);
 
         // Parse codespell output
         let lineContext = '';
@@ -102,29 +98,36 @@ async function run() {
             }
             let warningMatch = line.match(/WARNING\: (.*)/i);
             if (warningMatch) {
-                console.warn(warningMatch[1].trim());
+                warning(warningMatch[1].trim());
             }
             let errorMatch = line.match(/ERROR\: (.*)/i);
             if (errorMatch) {
-                console.error(errorMatch[1].trim());
+                error(errorMatch[1].trim());
             }
         });
 
         // Tell the user what we found
-        console.info(`Found ${corrections.length} misspellings.`);
-        console.info(corrections.map(c => `${c.filePath}:${c.lineNumber} ${c.word} ==> ${c.suggestions.join(", ")}`).join("\n"));
+        if (corrections.length > 0)
+        {
+            warning(`Found ${corrections.length} misspellings:`);
+            corrections.forEach(c => warning(` - ${c.filePath}:${c.lineNumber} ${c.word} ==> ${c.suggestions.join(", ")}`));
+        }
+        if (fixedFiles.length > 0)
+        {
+            console.info(`Fixed misspellings in ${fixedFiles.length} files:`);
+            fixedFiles.forEach(f => console.info(` - ${f.path}`));
+        }
 
         // If anything was found, commit or suggest corrections on the PR (if configured)
         if (pullRequestId > 0) {
             if (commitChanges && fixedFiles.length > 0) {
-                console.log(`Committing codespell corrections to PR...`);
                 await ado.commitCorrectionsToPullRequest({
                     pullRequestId: pullRequestId,
                     fixedFiles: fixedFiles
                 });
 
-            } else if (suggestChanges && corrections.length > 0) {
-                console.log(`Suggesting codespell corrections to PR...`);
+            }
+            if (suggestChanges) {
                 await ado.suggestCorrectionsToPullRequest({
                     pullRequestId: pullRequestId,
                     corrections: corrections

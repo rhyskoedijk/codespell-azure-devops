@@ -1,10 +1,10 @@
 {
     "manifestVersion": 1,
     "id": "codespell",
-    "publisher": "rhyskoedijk",
-    "version": "1.0.3",
     "name": "Codespell",
     "description": "Fix common misspellings in your source code",
+    "version": "1.0.15",
+    "publisher": "rhyskoedijk",
     "public": false,
     "categories": [
         "Azure Pipelines"
@@ -18,13 +18,18 @@
         "default": "images/icon.png"
     },
     "links": {
-        "support": { 
-            "uri": "https://github.com/rhyskoedijk/codespell-azure-devops/issues" 
+        "support": {
+            "uri": "https://github.com/rhyskoedijk/codespell-azure-devops/issues"
         }
     },
     "repository": {
         "type": "git",
         "uri": "https://github.com/rhyskoedijk/codespell-azure-devops"
+    },
+    "content": {
+        "details": {
+            "path": "README.md"
+        }
     },
     "files": [
         {
