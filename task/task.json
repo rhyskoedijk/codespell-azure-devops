@@ -30,20 +30,20 @@
     ],
     "inputs": [
         {
-            "name": "commitChanges",
+            "name": "commitSuggestions",
             "type": "boolean",
-            "label": "Commit changes",
+            "label": "Commit suggestions",
             "defaultValue": false,
             "required": false,
-            "helpMarkDown": "Commit changes"
+            "helpMarkDown": "Commit suggestions"
         },
         {
-            "name": "suggestChanges",
+            "name": "commentSuggestions",
             "type": "boolean",
-            "label": "Suggest changes",
+            "label": "Comment suggestions",
             "defaultValue": false,
             "required": false,
-            "helpMarkDown": "Suggest changes"
+            "helpMarkDown": "Comment suggestions"
         },
         {
             "name": "failOnMisspelling",
