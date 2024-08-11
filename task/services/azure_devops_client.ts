@@ -1,8 +1,12 @@
 import * as azdev from "azure-devops-node-api";
 import { GitPullRequestCommentThread, Comment, CommentThreadStatus, CommentType, VersionControlChangeType, ItemContentType } from "azure-devops-node-api/interfaces/GitInterfaces";
 
+export interface IFile {
+  path: string;
+  contents: Buffer;
+}
 export interface IFileCorrection {
-  file: string;
+  filePath: string;
   lineNumber: number;
   lineText: string;
   word: string;
@@ -30,7 +34,7 @@ export class AzureDevOpsClient {
 
   public async commitCorrectionsToPullRequest(options: {
     pullRequestId: number,
-    corrections: IFileCorrection[]
+    fixedFiles: IFile[]
   }) {
     let git = await this.connection.getGitApi();
 
@@ -39,27 +43,35 @@ export class AzureDevOpsClient {
     if (!pullRequest) {
       throw new Error(`Could not find pull request with ID ${options.pullRequestId}`);
     }
-    
-    // Commit local changes to the pull request source branch
-    let changedFiles = options.corrections.map(correction => correction.file);
-    await git.createPush({
-      refUpdates: [{
-        name: pullRequest.sourceRefName
-      }],
-      commits: [{
-        comment: "Codespell corrections",
-        changes: changedFiles.map(f => ({
-          changeType: VersionControlChangeType.Edit,
-          item: {
-            path: f
-          },
-          newContent: {
-            content: "This is a test",
-            contentType: ItemContentType.RawText
-          }
-        }))
-      }]
-    }, this.repositoryId, this.project);
+
+    try {
+      
+      // Commit local changes to the pull request source branch
+      console.log("Committing corrections to pull request for files", options.fixedFiles.map(f => f.path));
+      await git.createPush({
+        refUpdates: [{
+          name: pullRequest.sourceRefName,
+          oldObjectId: pullRequest.lastMergeSourceCommit?.commitId
+        }],
+        commits: [{
+          comment: "Codespell corrections",
+          changes: options.fixedFiles.map(f => ({
+            changeType: VersionControlChangeType.Edit,
+            item: {
+              path: f.path
+            },
+            newContent: {
+              content: f.contents.toString("base64"),
+              contentType: ItemContentType.Base64Encoded
+            }
+          }))
+        }]
+      }, this.repositoryId, this.project);
+
+    }
+    catch (e) {
+      console.error(e)
+    }
   }
 
   public async suggestCorrectionsToPullRequest(options: {
@@ -90,7 +102,7 @@ export class AzureDevOpsClient {
 
     // Find corrections that relevant to the PR file changes and that have not been suggested yet
     let correctionsToSuggest = options.corrections.filter(correction => {
-      let isFileAddedOrEdited = addedOrEditedFilePaths?.some(path => path === correction.file);
+      let isFileAddedOrEdited = addedOrEditedFilePaths?.some(path => path === correction.filePath);
       let hasActiveSuggestionThread = activeThreads.some(thread => isThreadForCorrection(userId, thread, correction));
       return isFileAddedOrEdited && !hasActiveSuggestionThread;
     });
@@ -121,7 +133,7 @@ export class AzureDevOpsClient {
         }],
         status: CommentThreadStatus.Active,
         threadContext: {
-          filePath: correction.file,
+          filePath: correction.filePath,
           rightFileStart: {
             line: correction.lineNumber,
             offset: correctionLineStartOffset
@@ -243,7 +255,7 @@ function isThreadForCorrection(userId: string | null, thread: GitPullRequestComm
     thread.status === CommentThreadStatus.Active && // is active
     thread.comments?.some(comment => comment.author?.id === userId) && // has a comment from our user id
     threadCorrection && // has a codespell correction property
-    threadCorrection.file === correction.file && // is for the same file
+    threadCorrection.filePath === correction.filePath && // is for the same file
     threadCorrection.lineNumber === correction.lineNumber && // is for the same line
     threadCorrection.word === correction.word // is for the same word
   ) || false;
@@ -258,9 +270,9 @@ function commandHelpText(commandPrefix: string, correction: IFileCorrection): st
     " - `" + commandPrefix + " ignore this` will ignore this single misspelling instance using an inline code comment",
     " - `" + commandPrefix + " ignore word` will ignore all misspellings of `" + correction.word + "` by adding it to the ignored words list",
     " - `" + commandPrefix + " ignore line` will ignore all misspellings on line " + correction.lineNumber + " using an inline code comment",
-    " - `" + commandPrefix + " ignore file` will add `" + correction.file + "` to the ignored files list",
-    " - `" + commandPrefix + " ignore ext` will add `*." + correction.file.split(".").pop() + "` to the ignored files list",
-    " - `" + commandPrefix + " ignore dir` will add `" + correction.file.split("/").splice(0, -1).join("/") + "/*` to the ignored files list",
+    " - `" + commandPrefix + " ignore file` will add `" + correction.filePath + "` to the ignored files list",
+    " - `" + commandPrefix + " ignore ext` will add `*." + correction.filePath.split(".").pop() + "` to the ignored files list",
+    " - `" + commandPrefix + " ignore dir` will add `" + correction.filePath.split("/").splice(0, -1).join("/") + "/*` to the ignored files list",
     " - `" + commandPrefix + " ignore <pattern>` will add a custom file path pattern to the ignored files list",
     "",
     "</details>"

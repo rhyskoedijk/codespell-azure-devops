@@ -1,6 +1,7 @@
 import * as tl from "azure-pipelines-task-lib/task"
 import { ToolRunner } from "azure-pipelines-task-lib/toolrunner"
-import { AzureDevOpsClient, IFileCorrection } from "./services/azure_devops_client";
+import { AzureDevOpsClient, IFile, IFileCorrection } from "./services/azure_devops_client";
+import fs from "fs";
 
 async function run() {
     try {
@@ -76,35 +77,53 @@ async function run() {
 
         // Parse codespell output
         let lineContext = '';
+        let fixedFiles: IFile[] = [];
         let corrections: IFileCorrection[] = [];
         codeSpellResult.stdout.split(/[\r\n]+/).forEach((line: string) => {
-            let match = line.match(/(.*):(\d+):(.*)==>(.*)/);
-            if (match) {
+            let correctionMatch = line.match(/(.*):(\d+):(.*)==>(.*)/i);
+            if (correctionMatch) {
                 corrections.push({
-                    file: match[1].trim().replace(/^\.+/g, ""),
-                    lineNumber: parseInt(match[2]),
+                    filePath: correctionMatch[1].trim().replace(/^\.+/g, ""),
+                    lineNumber: parseInt(correctionMatch[2]),
                     lineText: lineContext.substring(1),
-                    word: match[3].trim(),
-                    suggestions: match[4].trim().split(',').map(s => s.trim())
+                    word: correctionMatch[3].trim(),
+                    suggestions: correctionMatch[4].trim().split(',').map(s => s.trim())
                 });
             }
             lineContext = line;
         });
+        codeSpellResult.stderr.split(/[\r\n]+/).forEach((line: string) => {
+            let fixedFileMatch = line.match(/FIXED\: (.*)/i);
+            if (fixedFileMatch) {
+                fixedFiles.push({
+                    path: fixedFileMatch[1].trim().replace(/^\.+/g, ""),
+                    contents: fs.readFileSync(fixedFileMatch[1])
+                });
+            }
+            let warningMatch = line.match(/WARNING\: (.*)/i);
+            if (warningMatch) {
+                console.warn(warningMatch[1].trim());
+            }
+            let errorMatch = line.match(/ERROR\: (.*)/i);
+            if (errorMatch) {
+                console.error(errorMatch[1].trim());
+            }
+        });
 
         // Tell the user what we found
         console.info(`Found ${corrections.length} misspellings.`);
-        console.info(corrections.map(c => `${c.file}:${c.lineNumber} ${c.word} ==> ${c.suggestions.join(", ")}`).join("\n"));
+        console.info(corrections.map(c => `${c.filePath}:${c.lineNumber} ${c.word} ==> ${c.suggestions.join(", ")}`).join("\n"));
 
         // If anything was found, commit or suggest corrections on the PR (if configured)
-        if (corrections.length > 0 && pullRequestId > 0) {
-            if (commitChanges) {
+        if (pullRequestId > 0) {
+            if (commitChanges && fixedFiles.length > 0) {
                 console.log(`Committing codespell corrections to PR...`);
                 await ado.commitCorrectionsToPullRequest({
                     pullRequestId: pullRequestId,
-                    corrections: corrections
+                    fixedFiles: fixedFiles
                 });
 
-            } else if (suggestChanges) {
+            } else if (suggestChanges && corrections.length > 0) {
                 console.log(`Suggesting codespell corrections to PR...`);
                 await ado.suggestCorrectionsToPullRequest({
                     pullRequestId: pullRequestId,
