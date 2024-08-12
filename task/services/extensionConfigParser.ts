@@ -9,6 +9,7 @@ export interface IExtensionConfig {
   pullRequestId: number;
 
   hasCodeSpellConfigFile: boolean;
+  skipIfCodeSpellConfigMissing: boolean;
   commitSuggestions: boolean;
   commentSuggestions: boolean;
   failOnMisspelling: boolean;
@@ -16,7 +17,7 @@ export interface IExtensionConfig {
 }
 
 interface ICodeSpellConfigDevOpsSection {
-  "commit-changes": any;
+  "commit-suggestions": any;
   "comment-suggestions": any;
   "fail-on-misspelling": any;
 }
@@ -39,7 +40,7 @@ export function parseExtensionConfiguration(): IExtensionConfig {
 
   // If a .codespellrc file is present, parse it
   let hasCodeSpellConfigFile = fs.existsSync(".codespellrc");
-  let codeSpellConfig = ini.parse(fs.readFileSync(".codespellrc", "utf-8"));
+  let codeSpellConfig = fs.existsSync(".codespellrc") ? ini.parse(fs.readFileSync(".codespellrc", "utf-8")) : null;
   let codeSpellDevOpsConfig = codeSpellConfig?.devops as ICodeSpellConfigDevOpsSection;
   if (hasCodeSpellConfigFile && codeSpellConfig) {
     console.log("Found '.codespellrc' configuration:", JSON.stringify(codeSpellConfig, null, 2));
@@ -52,7 +53,8 @@ export function parseExtensionConfiguration(): IExtensionConfig {
     pullRequestId: parseInt(tl.getVariable("System.PullRequest.PullRequestId") || "0"),
 
     hasCodeSpellConfigFile: hasCodeSpellConfigFile,
-    commitSuggestions: tl.getBoolInput("commitSuggestions", false) || codeSpellDevOpsConfig?.["commit-changes"] !== undefined || false,
+    skipIfCodeSpellConfigMissing: tl.getBoolInput("skipIfCodeSpellConfigMissing", false),
+    commitSuggestions: tl.getBoolInput("commitSuggestions", false) || codeSpellDevOpsConfig?.["commit-suggestions"] !== undefined || false,
     commentSuggestions: tl.getBoolInput("commentSuggestions", false) || codeSpellDevOpsConfig?.["comment-suggestions"] !== undefined || false,
     failOnMisspelling: tl.getBoolInput("failOnMisspelling", false) || codeSpellDevOpsConfig?.["fail-on-misspelling"] !== undefined || false,
     debug: tl.getVariable("System.Debug")?.toLowerCase() === "true"

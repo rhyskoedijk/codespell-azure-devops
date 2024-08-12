@@ -1,9 +1,8 @@
 import * as tl from "azure-pipelines-task-lib/task"
 import { debug, warning, error } from "azure-pipelines-task-lib/task"
 import { ToolRunner } from "azure-pipelines-task-lib/toolrunner"
-import { AzureDevOpsClient, IFile, IFileCorrection } from "./services/azureDevOpsClient";
+import { AzureDevOpsClient, IFile, IFileSuggestion } from "./services/azureDevOpsClient";
 import { parseExtensionConfiguration } from "./services/extensionConfigParser";
-import fs from "fs";
 
 async function run() {
     try {
@@ -11,6 +10,12 @@ async function run() {
         let config = parseExtensionConfiguration();
         let ado: AzureDevOpsClient = new AzureDevOpsClient(config.organizationUri, config.project, config.repositoryId);
 
+        if (config.skipIfCodeSpellConfigMissing && !config.hasCodeSpellConfigFile) {
+            console.info("Skipping task as '.codespellrc' configuration file is missing and 'skipIfCodeSpellConfigMissing' is set.");
+            tl.setResult(tl.TaskResult.Skipped, "No configuration found.");
+            return;
+        }
+        
         if (config.pullRequestId > 0) {
             if (config.commitSuggestions) {
                 console.info(`Any misspelling suggestions will be committed directly to PR #${config.pullRequestId}`);
@@ -41,7 +46,7 @@ async function run() {
         // Run codespell
         console.info("Running codespell...");
         let codeSpellRunner: ToolRunner = tl.tool(tl.which("codespell", true));
-        let codeSpellArguments = ["--quiet-level", "2", "--context", "0", "--hard-encoding-detection"];
+        let codeSpellArguments = ["--quiet-level", "2", "--context", "0"];
         if (config.commitSuggestions) {
             codeSpellArguments.push("--write-changes");
         }
@@ -54,16 +59,16 @@ async function run() {
         // Parse codespell output
         let lineContext = '';
         let fixedFiles: IFile[] = [];
-        let corrections: IFileCorrection[] = [];
+        let suggestions: IFileSuggestion[] = [];
         codeSpellResult.stdout.split(/[\r\n]+/).forEach((line: string) => {
-            let correctionMatch = line.match(/(.*):(\d+):(.*)==>(.*)/i);
-            if (correctionMatch) {
-                corrections.push({
-                    filePath: correctionMatch[1].trim().replace(/^\.+/g, ""),
-                    lineNumber: parseInt(correctionMatch[2]),
+            let suggestionMatch = line.match(/(.*):(\d+):(.*)==>(.*)/i);
+            if (suggestionMatch) {
+                suggestions.push({
+                    path: suggestionMatch[1].trim(),
+                    lineNumber: parseInt(suggestionMatch[2]),
                     lineText: lineContext.substring(1),
-                    word: correctionMatch[3].trim(),
-                    suggestions: correctionMatch[4].trim().split(',').map(s => s.trim())
+                    word: suggestionMatch[3].trim(),
+                    suggestions: suggestionMatch[4].trim().split(',').map(s => s.trim())
                 });
             }
             lineContext = line;
@@ -72,8 +77,7 @@ async function run() {
             let fixedFileMatch = line.match(/FIXED\: (.*)/i);
             if (fixedFileMatch) {
                 fixedFiles.push({
-                    path: fixedFileMatch[1].trim().replace(/^\.+/g, ""),
-                    contents: fs.readFileSync(fixedFileMatch[1])
+                    path: fixedFileMatch[1].trim()
                 });
             }
             let warningMatch = line.match(/WARNING\: (.*)/i);
@@ -87,35 +91,45 @@ async function run() {
         });
 
         // Tell the user what we found
-        if (corrections.length > 0) {
-            warning(`Found ${corrections.length} misspellings:`);
-            corrections.forEach(c => warning(` - ${c.filePath}:${c.lineNumber} ${c.word} ==> ${c.suggestions.join(", ")}`));
+        let noMisspellingsFound = (suggestions.length === 0 && fixedFiles.length === 0);
+        if (noMisspellingsFound) {
+            console.info("No misspellings found.");
         }
         if (fixedFiles.length > 0) {
             console.info(`Fixed misspellings in ${fixedFiles.length} files:`);
             fixedFiles.forEach(f => console.info(` - ${f.path}`));
         }
+        if (suggestions.length > 0) {
+            warning(`Found ${suggestions.length} misspelling(s) ${config.commitSuggestions ? "that could not be automatically corrected" : "" }`);
+            suggestions.forEach(c => warning(` - ${c.path}:${c.lineNumber} ${c.word} ==> ${c.suggestions.join(", ")}`));
+        }
 
-        // If anything was found, commit or suggest corrections on the PR (if configured)
+        // If anything was found, commit or comment suggestions to the PR (if configured)
         if (config.pullRequestId > 0) {
-            if (config.commitSuggestions && fixedFiles.length > 0) {
-                await ado.commitCorrectionsToPullRequest({
+            if (config.commitSuggestions) {
+                await ado.commitSuggestionsToPullRequest({
                     pullRequestId: config.pullRequestId,
-                    fixedFiles: fixedFiles
+                    fixedFiles: fixedFiles,
+                    suggestions: config.commentSuggestions ? suggestions : []
                 });
-
             }
             if (config.commentSuggestions) {
-                await ado.suggestCorrectionsToPullRequest({
+                await ado.commentSuggestionsOnPullRequest({
                     pullRequestId: config.pullRequestId,
-                    corrections: corrections
+                    suggestions: suggestions
                 });
             }
         }
 
         tl.setResult(
-            (corrections.length === 0 || !config.failOnMisspelling) ? tl.TaskResult.Succeeded : tl.TaskResult.Failed,
-            `Found ${corrections.length} misspellings.`
+            noMisspellingsFound 
+                ? tl.TaskResult.Succeeded 
+                : (!config.failOnMisspelling 
+                    ? tl.TaskResult.SucceededWithIssues 
+                    : tl.TaskResult.Failed),
+            noMisspellingsFound
+                ? "No misspellings found."
+                : `Found ${suggestions.length} misspelling(s).`
         );
     }
     catch (err: any) {

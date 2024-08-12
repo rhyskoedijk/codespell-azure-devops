@@ -1,13 +1,12 @@
 import * as azdev from "azure-devops-node-api";
 import { debug, warning, error, getEndpointAuthorizationParameter, getInput } from "azure-pipelines-task-lib/task"
 import { GitPullRequestCommentThread, Comment, CommentThreadStatus, CommentType, VersionControlChangeType, ItemContentType } from "azure-devops-node-api/interfaces/GitInterfaces";
+import fs from "fs";
 
 export interface IFile {
   path: string;
-  contents: Buffer;
 }
-export interface IFileCorrection {
-  filePath: string;
+export interface IFileSuggestion extends IFile {
   lineNumber: number;
   lineText: string;
   word: string;
@@ -33,12 +32,41 @@ export class AzureDevOpsClient {
     );
   }
 
-  public async commitCorrectionsToPullRequest(options: {
+  public async commitSuggestionsToPullRequest(options: {
     pullRequestId: number,
-    fixedFiles: IFile[]
+    fixedFiles: IFile[],
+    suggestions: IFileSuggestion[]
   }) {
     let git = await this.connection.getGitApi();
     try {
+
+      // Commit all files which have been automatically fixed or have multiple suggestion options to pick from
+      let suggestionsWithMultipleOptions = options.suggestions?.filter(suggestion => suggestion.suggestions.length > 1);
+      let filePathsToCommit = [...new Set((options.fixedFiles || []).concat(suggestionsWithMultipleOptions || []).map(f => f.path))];
+      if (filePathsToCommit.length === 0) {
+        return;
+      }
+
+      // For every suggestion with multiple options, update the line in the file to include a placeholder text with all suggestions
+      // This is required so that when we commit the changes, the file is actually changed in the PR and can then be commented on with suggestions
+      suggestionsWithMultipleOptions?.forEach(suggestion => {
+        try {
+          let contents = fs.readFileSync(suggestion.path);
+          let lines = contents.toString().split("\n");
+          let line = lines[suggestion.lineNumber - 1];
+          let lineStart = line.substring(0, line.indexOf(suggestion.word));
+          let lineEnd = line.substring(line.indexOf(suggestion.word) + suggestion.word.length);
+          let newWord = `${suggestion.word}=[${suggestion.suggestions.join("|")}]`;
+          let newLine = lineStart + newWord + lineEnd;
+          lines[suggestion.lineNumber - 1] = newLine;
+          suggestion.word = newWord;
+          suggestion.lineText = newLine;
+          fs.writeFileSync(suggestion.path, Buffer.from(lines.join("\n")));
+        }
+        catch(e) {
+          error(`Failed to patch local file with multiple suggestions: ${e}`);
+        }
+      });
 
       // Get pull request details
       let pullRequest = await git.getPullRequest(this.repositoryId, options.pullRequestId, this.project);
@@ -46,10 +74,8 @@ export class AzureDevOpsClient {
         throw new Error(`Could not find pull request with ID ${options.pullRequestId}`);
       }
 
-      let fixedFilesToCommit = options.fixedFiles;
-
       // Commit local changes to the pull request source branch
-      console.info("Committing corrections to pull request for files", fixedFilesToCommit.map(f => f.path));
+      console.info("Committing suggestions to pull request for files", filePathsToCommit);
       await git.createPush({
         refUpdates: [{
           name: pullRequest.sourceRefName,
@@ -57,13 +83,13 @@ export class AzureDevOpsClient {
         }],
         commits: [{
           comment: "Codespell corrections",
-          changes: fixedFilesToCommit.map(f => ({
+          changes: filePathsToCommit.map(path => ({
             changeType: VersionControlChangeType.Edit,
             item: {
-              path: f.path
+              path: path.replace(/^\.+/g, "")
             },
             newContent: {
-              content: f.contents.toString("base64"),
+              content: fs.readFileSync(path).toString("base64"),
               contentType: ItemContentType.Base64Encoded
             }
           }))
@@ -72,85 +98,72 @@ export class AzureDevOpsClient {
 
     }
     catch (e) {
-      error(`Failed to commit corrections to pull request: ${e}`);
+      error(`Failed to commit codespell suggestions to pull request: ${e}`);
     }
   }
 
-  public async suggestCorrectionsToPullRequest(options: {
+  public async commentSuggestionsOnPullRequest(options: {
     pullRequestId: number,
-    corrections: IFileCorrection[]
+    suggestions: IFileSuggestion[]
   }) {
     let userId = await this.getUserId();
     let git = await this.connection.getGitApi();
 
     try {
 
-      // Find the most recent iteration ID for the PR
-      let latestIterationId = await git.getPullRequestIterations(this.repositoryId, options.pullRequestId, this.project).then(iterations => {
-        return Math.max(...iterations.map(i => i.id || 1));
-      });
-      if (!latestIterationId) {
-        throw new Error("Could not find the latest iteration ID for the PR");
-      }
-
       // Find all added or edited files paths in the PR
-      let addedOrEditedFilePaths = await git.getPullRequestIterationChanges(this.repositoryId, options.pullRequestId, latestIterationId, this.project, 2000).then(changes => {
-        return changes?.changeEntries
-          ?.filter(c => c?.changeType === VersionControlChangeType.Add || c?.changeType === VersionControlChangeType.Edit)
-          ?.flatMap(c => c?.item?.path);
-      });
+      let changedFilePaths = await this.getChangedFilePathsForPullRequest(options.pullRequestId);
 
       // Find all active threads in the PR
       let activeThreads = (await git.getThreads(this.repositoryId, options.pullRequestId, this.project))
         .filter(thread => !thread.isDeleted && thread.status === CommentThreadStatus.Active);
 
-      // Filter corrections to only those that are relevant to the PR file changes and that have not been suggested yet
-      let correctionsToSuggest = options.corrections.filter(correction => {
-        let isFileAddedOrEdited = addedOrEditedFilePaths?.some(path => path === correction.filePath);
-        let hasActiveSuggestionThread = activeThreads.some(thread => isThreadForCorrection(userId, thread, correction));
+      // Filter suggestions to only those that are relevant to the PR file changes and that have not been suggested yet
+      let suggestionsToComment = options.suggestions.filter(suggestion => {
+        let isFileAddedOrEdited = changedFilePaths?.some(filePath => filePath === suggestion.path.replace(/^\.+/g, ""));
+        let hasActiveSuggestionThread = activeThreads.some(thread => isThreadForSuggestion(userId, thread, suggestion));
         return isFileAddedOrEdited && !hasActiveSuggestionThread;
       });
 
-      // Resolve threads for corrections that have been fixed
+      // Resolve threads for suggestions that have been fixed
       activeThreads.forEach(thread => {
-        let correction = options.corrections.find(correction => isThreadForCorrection(userId, thread, correction));
-        if (!correction && thread.id) {
-          console.info(`Closing correction thread as fixed [pr: ${options.pullRequestId}, thread: ${thread.id}]`);
+        let suggestion = options.suggestions.find(suggestion => isThreadForSuggestion(userId, thread, suggestion));
+        if (!suggestion && thread.id) {
+          console.info(`Closing suggestion thread as fixed [pr: ${options.pullRequestId}, thread: ${thread.id}]`);
           git.updateThread({
             status: CommentThreadStatus.Fixed
           }, this.repositoryId, options.pullRequestId, thread.id, this.project);
         }
       });
 
-      correctionsToSuggest.forEach(async (correction) => {
-        console.info("Creating suggestion comment for correction:", correction);
-        let correctionLineStartOffset = correction.lineText.indexOf(correction.word);
-        let correctionLineEndOffset = correctionLineStartOffset + correction.word.length;
+      suggestionsToComment.forEach(async (suggestion) => {
+        console.info("Creating suggestion thread for:", suggestion);
+        let suggestionLineStartOffset = suggestion.lineText.indexOf(suggestion.word) + 1;
+        let suggestionLineEndOffset = suggestionLineStartOffset + suggestion.word.length;
         await git.createThread({
           comments: [{
             commentType: CommentType.CodeChange,
             content: (
-              `Misspelling of '${correction.word}'\n` +
-              correction.suggestions.map(s => "```suggestion\n" + s + "\n```").join("\n") +
-              commandHelpText(this.commandPrefix, correction)
+              suggestion.suggestions.map(s => "```suggestion\n" + s + "\n```").join("\n") + "\n" +
+              commandHelpText(this.commandPrefix, suggestion)
             )
           }],
           status: CommentThreadStatus.Active,
           threadContext: {
-            filePath: correction.filePath,
+            filePath: suggestion.path.replace(/^\.+/g, ""),
             rightFileStart: {
-              line: correction.lineNumber,
-              offset: correctionLineStartOffset
+              line: suggestion.lineNumber,
+              offset: suggestionLineStartOffset
             },
             rightFileEnd: {
-              line: correction.lineNumber,
-              offset: correctionLineEndOffset
+              line: suggestion.lineNumber,
+              offset: suggestionLineEndOffset
             }
           },
           properties: {
-            "codespell:correction": {
+            "codespell:suggestion": {
               "$type": "System.String",
-              "$value": JSON.stringify(correction)
+              "$value": JSON.stringify(suggestion)
             }
           }
         }, this.repositoryId, options.pullRequestId, this.project);
@@ -158,7 +171,7 @@ export class AzureDevOpsClient {
 
     }
     catch (e) {
-      error(`Failed to suggest corrections to pull request: ${e}`);
+      error(`Failed to comment codespell suggestions on pull request: ${e}`);
     }
   }
 
@@ -210,13 +223,13 @@ export class AzureDevOpsClient {
       return;
     }
 
-    // Parse the correction info from the thread properties
-    let correction = getThreadCorrectionProperty(options.thread);
-    if (!correction) {
+    // Parse the suggestion info from the thread properties
+    let suggestion = getThreadSuggestionProperty(options.thread);
+    if (!suggestion) {
       return;
     }
 
-    console.info(`Processing command '${command.join(" ")}' in [pr: ${options.pullRequestId}, thread: ${options.thread.id}, comment: ${options.comment.id}] for correction:`, correction);
+    console.info(`Processing command '${command.join(" ")}' in [pr: ${options.pullRequestId}, thread: ${options.thread.id}, comment: ${options.comment.id}] for suggestion:`, suggestion);
     switch (command[0]) {
       case "ignore":
         let ignoreTarget = command.length > 1 ? command[1] : "this";
@@ -254,6 +267,24 @@ export class AzureDevOpsClient {
   private async getUserId(): Promise<string | null> {
     return (this.userId ||= (await this.connection.connect()).authenticatedUser?.id || null);
   }
+
+  private async getChangedFilePathsForPullRequest(pullRequestId: number): Promise<string[]> {
+    let git = await this.connection.getGitApi();
+    const iterations = await git.getPullRequestIterations(this.repositoryId, pullRequestId, this.project);
+    const files: string[] = [];
+    for (const iteration of iterations) {
+      const changes = await git.getPullRequestIterationChanges(this.repositoryId, pullRequestId, iteration.id || 0, this.project, 2000);
+      const iterationFiles = changes?.changeEntries
+        ?.filter(c => c.changeType === VersionControlChangeType.Add || c.changeType === VersionControlChangeType.Edit)
+        ?.filter(c => c.item?.isFolder !== true)
+        ?.flatMap(c => c.item?.path || '');
+      if (iterationFiles) {
+        files.push(...iterationFiles);
+      }
+    }
+
+    return files;
+  }
 }
 
 function getAzureDevOpsAccessToken(): string {
@@ -281,39 +312,39 @@ function getAzureDevOpsAccessToken(): string {
   throw new Error("Failed to get Azure DevOps access token");
 }
 
-function getThreadCorrectionProperty(thread: GitPullRequestCommentThread): IFileCorrection | null {
-  let correction = thread.properties?.["codespell:correction"]?.["$value"];
-  if (!correction) {
+function getThreadSuggestionProperty(thread: GitPullRequestCommentThread): IFileSuggestion | null {
+  let suggestion = thread.properties?.["codespell:suggestion"]?.["$value"];
+  if (!suggestion) {
     return null;
   }
-  return JSON.parse(correction);
+  return JSON.parse(suggestion);
 }
 
-function isThreadForCorrection(userId: string | null, thread: GitPullRequestCommentThread, correction: IFileCorrection): boolean {
-  let threadCorrection = getThreadCorrectionProperty(thread);
+function isThreadForSuggestion(userId: string | null, thread: GitPullRequestCommentThread, suggestion: IFileSuggestion): boolean {
+  let threadSuggestion = getThreadSuggestionProperty(thread);
   return (
     thread.isDeleted === false && // is not deleted
     thread.status === CommentThreadStatus.Active && // is active
     thread.comments?.some(comment => comment.author?.id === userId) && // has a comment from our user id
-    threadCorrection && // has a codespell correction property
-    threadCorrection.filePath === correction.filePath && // is for the same file
-    threadCorrection.lineNumber === correction.lineNumber && // is for the same line
-    threadCorrection.word === correction.word // is for the same word
+    threadSuggestion && // has a codespell suggestion property
+    threadSuggestion.path === suggestion.path && // is for the same file
+    threadSuggestion.lineNumber === suggestion.lineNumber && // is for the same line
+    threadSuggestion.word === suggestion.word // is for the same word
   ) || false;
 }
 
-function commandHelpText(commandPrefix: string, correction: IFileCorrection): string {
+function commandHelpText(commandPrefix: string, suggestion: IFileSuggestion): string {
   return [
     "<details>",
     "<summary>🛠️ Codespell commands and options</summary>",
     "",
     "You can trigger Codespell actions by replying to this comment with any of the following commands:",
     " - `" + commandPrefix + " ignore this` will ignore this single misspelling instance using an inline code comment",
-    " - `" + commandPrefix + " ignore word` will ignore all misspellings of `" + correction.word + "` by adding it to the ignored words list",
-    " - `" + commandPrefix + " ignore line` will ignore all misspellings on line " + correction.lineNumber + " using an inline code comment",
-    " - `" + commandPrefix + " ignore file` will add `" + correction.filePath + "` to the ignored files list",
-    " - `" + commandPrefix + " ignore ext` will add `*." + correction.filePath.split(".").pop() + "` to the ignored files list",
-    " - `" + commandPrefix + " ignore dir` will add `" + correction.filePath.split("/").splice(0, -1).join("/") + "/*` to the ignored files list",
+    " - `" + commandPrefix + " ignore word` will ignore all misspellings of `" + suggestion.word + "` by adding it to the ignored words list",
+    " - `" + commandPrefix + " ignore line` will ignore all misspellings on line " + suggestion.lineNumber + " using an inline code comment",
+    " - `" + commandPrefix + " ignore file` will add `" + suggestion.path + "` to the ignored files list",
+    " - `" + commandPrefix + " ignore ext` will add `*." + suggestion.path.split(".").pop() + "` to the ignored files list",
+    " - `" + commandPrefix + " ignore dir` will add `" + suggestion.path.split("/").splice(0, -1).join("/") + "/*` to the ignored files list",
     " - `" + commandPrefix + " ignore <pattern>` will add a custom file path pattern to the ignored files list",
     "",
     "</details>"

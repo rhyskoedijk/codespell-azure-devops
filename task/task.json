@@ -18,14 +18,19 @@
     "version": {
         "Major": 1,
         "Minor": 0,
-        "Patch": 15
+        "Patch": 31
     },
     "instanceNameFormat": "Codespell",
     "groups": [
         {
             "name": "devops",
             "displayName": "Azure DevOps Authentication",
-            "isExpanded": true
+            "isExpanded": false
+        },
+        {
+            "name": "advanced",
+            "displayName": "Advanced",
+            "isExpanded": false
         }
     ],
     "inputs": [
@@ -68,6 +73,15 @@
             "label": "Azure DevOps Personal Access Token",
             "required": false,
             "helpMarkDown": "The Azure DevOps Personal Access Token (PAT) for accessing Azure DevOps repositories, if you want to use a different service principal than the default when committing and suggesting changes for misspellings."
+        },
+        {
+            "name": "skipIfCodeSpellConfigMissing",
+            "type": "boolean",
+            "groupName": "advanced",
+            "label": "Skip check if codespell is not configured for the repository (i.e. `.codespellrc` does not exist)",
+            "defaultValue": false,
+            "required": false,
+            "helpMarkDown": "Skip check if codespell is not configured for the repository (i.e. `.codespellrc` does not exist)"
         }
     ],
     "execution": {

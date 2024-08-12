@@ -3,7 +3,7 @@
     "id": "codespell",
     "name": "Codespell",
     "description": "Fix common misspellings in your source code",
-    "version": "1.0.15",
+    "version": "1.0.30",
     "publisher": "rhyskoedijk",
     "public": false,
     "categories": [
@@ -36,19 +36,34 @@
             "path": "task"
         },
         {
+            "path": "decorator.yml",
+            "addressable": true,
+            "contentType": "text/plain"
+        },
+        {
             "path": "images",
             "addressable": true
         }
     ],
     "contributions": [
         {
-            "id": "codespell",
+            "id": "codespell-task",
             "type": "ms.vss-distributed-task.task",
             "targets": [
                 "ms.vss-distributed-task.tasks"
             ],
             "properties": {
                 "name": "task"
+            }
+        },
+        {
+            "id": "codespell-decorator",
+            "type": "ms.azure-pipelines.pipeline-decorator",
+            "targets": [
+                "ms.azure-pipelines-agent-job.post-job-tasks"
+            ],
+            "properties": {
+                "template": "decorator.yml"
             }
         }
     ]
