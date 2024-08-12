@@ -54,9 +54,9 @@ export function parseExtensionConfiguration(): IExtensionConfig {
 
     hasCodeSpellConfigFile: hasCodeSpellConfigFile,
     skipIfCodeSpellConfigMissing: tl.getBoolInput("skipIfCodeSpellConfigMissing", false),
-    commitSuggestions: tl.getBoolInput("commitSuggestions", false) || codeSpellDevOpsConfig?.["commit-suggestions"] !== undefined || false,
-    commentSuggestions: tl.getBoolInput("commentSuggestions", false) || codeSpellDevOpsConfig?.["comment-suggestions"] !== undefined || false,
-    failOnMisspelling: tl.getBoolInput("failOnMisspelling", false) || codeSpellDevOpsConfig?.["fail-on-misspelling"] !== undefined || false,
+    commitSuggestions: tl.getBoolInput("commitSuggestions", false) || (codeSpellDevOpsConfig?.["commit-suggestions"] !== undefined) || false,
+    commentSuggestions: tl.getBoolInput("commentSuggestions", false) || (codeSpellDevOpsConfig?.["comment-suggestions"] !== undefined) || false,
+    failOnMisspelling: tl.getBoolInput("failOnMisspelling", false) || (codeSpellDevOpsConfig?.["fail-on-misspelling"] !== undefined) || false,
     debug: tl.getVariable("System.Debug")?.toLowerCase() === "true"
   };
 }

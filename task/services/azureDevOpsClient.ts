@@ -51,17 +51,18 @@ export class AzureDevOpsClient {
       // This is required so that when we commit the changes, the file is actually changed in the PR and can then be commented on with suggestions
       suggestionsWithMultipleOptions?.forEach(suggestion => {
         try {
-          let contents = fs.readFileSync(suggestion.path);
-          let lines = contents.toString().split("\n");
+          let lines = fs.readFileSync(suggestion.path).toString().split("\n");
           let line = lines[suggestion.lineNumber - 1];
           let lineStart = line.substring(0, line.indexOf(suggestion.word));
           let lineEnd = line.substring(line.indexOf(suggestion.word) + suggestion.word.length);
-          let newWord = `${suggestion.word}=[${suggestion.suggestions.join("|")}]`;
+          let newWord = `${suggestion.word} --> ${suggestion.suggestions.join("|")}`;
           let newLine = lineStart + newWord + lineEnd;
-          lines[suggestion.lineNumber - 1] = newLine;
-          suggestion.word = newWord;
-          suggestion.lineText = newLine;
-          fs.writeFileSync(suggestion.path, Buffer.from(lines.join("\n")));
+          if (line.indexOf(newWord) === -1) {
+            lines[suggestion.lineNumber - 1] = newLine;
+            suggestion.word = newWord;
+            suggestion.lineText = newLine;
+            fs.writeFileSync(suggestion.path, Buffer.from(lines.join("\n")));
+          }
         }
         catch(e) {
           error(`Failed to patch local file with multiple suggestions: ${e}`);
@@ -86,7 +87,7 @@ export class AzureDevOpsClient {
           changes: filePathsToCommit.map(path => ({
             changeType: VersionControlChangeType.Edit,
             item: {
-              path: path.replace(/^\.+/g, "")
+              path: normalizeDevOpsPath(path)
             },
             newContent: {
               content: fs.readFileSync(path).toString("base64"),
@@ -120,7 +121,7 @@ export class AzureDevOpsClient {
 
       // Filter suggestions to only those that are relevant to the PR file changes and that have not been suggested yet
       let suggestionsToComment = options.suggestions.filter(suggestion => {
-        let isFileAddedOrEdited = changedFilePaths?.some(filePath => filePath === suggestion.path.replace(/^\.+/g, ""));
+        let isFileAddedOrEdited = changedFilePaths?.some(filePath => normalizeDevOpsPath(filePath) === normalizeDevOpsPath(suggestion.path));
         let hasActiveSuggestionThread = activeThreads.some(thread => isThreadForSuggestion(userId, thread, suggestion));
         return isFileAddedOrEdited && !hasActiveSuggestionThread;
       });
@@ -150,7 +151,7 @@ export class AzureDevOpsClient {
           }],
           status: CommentThreadStatus.Active,
           threadContext: {
-            filePath: suggestion.path.replace(/^\.+/g, ""),
+            filePath: normalizeDevOpsPath(suggestion.path),
             rightFileStart: {
               line: suggestion.lineNumber,
               offset: suggestionLineStartOffset
@@ -318,6 +319,11 @@ function getThreadSuggestionProperty(thread: GitPullRequestCommentThread): IFile
     return null;
   }
   return JSON.parse(suggestion);
+}
+
+function normalizeDevOpsPath(path: string): string {
+  // Convert backslashes to forward slashes and remove leading dots, this is how DevOps paths are formatted
+  return path.replace(/^\.+/g, "").replace(/\\/g, "/");
 }
 
 function isThreadForSuggestion(userId: string | null, thread: GitPullRequestCommentThread, suggestion: IFileSuggestion): boolean {
