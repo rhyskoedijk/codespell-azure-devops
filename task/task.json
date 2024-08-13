@@ -18,7 +18,7 @@
     "version": {
         "Major": 1,
         "Minor": 0,
-        "Patch": 39
+        "Patch": 40
     },
     "instanceNameFormat": "Codespell",
     "groups": [
@@ -57,6 +57,13 @@
             "defaultValue": false,
             "required": false,
             "helpMarkDown": "Fail if any misspellings are found"
+        },
+        {
+            "name": "postFixCommand",
+            "type": "multiLine",
+            "label": "Post-fix command(s)",
+            "required": false,
+            "helpMarkDown": "Commands to run after fixing misspellings (e.g. 'npm format --fix'). Multiple commands can be separated by a new line."
         },
         {
             "name": "serviceConnection",

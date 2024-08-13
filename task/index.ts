@@ -1,9 +1,8 @@
-import { which, tool, setResult, TaskResult } from "azure-pipelines-task-lib/task"
+import { setResult, TaskResult } from "azure-pipelines-task-lib/task"
 import { debug, warning, error } from "azure-pipelines-task-lib/task"
-import { ToolRunner } from "azure-pipelines-task-lib/toolrunner"
 import { parseExtensionConfiguration } from "./services/extensionConfigParser";
 import { CodespellRunner } from "./services/codespellRunner";
-import { AzureDevOpsClient, IFile, IFileSuggestion } from "./services/azureDevOpsClient";
+import { AzureDevOpsClient } from "./services/azureDevOpsClient";
 
 async function run() {
     try {
@@ -37,7 +36,8 @@ async function run() {
 
         // Run codespell
         const codespell = await new CodespellRunner(config.debug).run({
-            writeChanges: config.commitSuggestions
+            writeChanges: config.commitSuggestions,
+            postFixCommand: config.postFixCommand
         });
 
         // Tell the user what we found

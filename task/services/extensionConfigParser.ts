@@ -1,4 +1,4 @@
-import { getVariable, getBoolInput } from "azure-pipelines-task-lib/task"
+import { getVariable, getInput, getBoolInput } from "azure-pipelines-task-lib/task"
 import fs from "fs";
 import ini from "ini";
 
@@ -12,6 +12,7 @@ export interface IExtensionConfig {
   skipIfCodeSpellConfigMissing: boolean;
   commitSuggestions: boolean;
   commentSuggestions: boolean;
+  postFixCommand?: string;
   failOnMisspelling: boolean;
   debug: boolean;
 }
@@ -19,6 +20,7 @@ export interface IExtensionConfig {
 interface ICodeSpellConfigDevOpsSection {
   "commit-suggestions": any;
   "comment-suggestions": any;
+  "post-fix-command": any;
   "fail-on-misspelling": any;
   "debug": any;
 }
@@ -58,6 +60,7 @@ export function parseExtensionConfiguration(): IExtensionConfig {
     commitSuggestions: getBoolInput("commitSuggestions", false) || (codeSpellDevOpsConfig?.["commit-suggestions"] !== undefined) || false,
     commentSuggestions: getBoolInput("commentSuggestions", false) || (codeSpellDevOpsConfig?.["comment-suggestions"] !== undefined) || false,
     failOnMisspelling: getBoolInput("failOnMisspelling", false) || (codeSpellDevOpsConfig?.["fail-on-misspelling"] !== undefined) || false,
+    postFixCommand: getInput("postFixCommand") || codeSpellDevOpsConfig?.["post-fix-command"],
     debug: (getVariable("System.Debug")?.toLowerCase() === "true") || (codeSpellDevOpsConfig?.["debug"] !== undefined) || false
   };
 }

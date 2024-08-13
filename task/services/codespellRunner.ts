@@ -33,7 +33,8 @@ export class CodespellRunner {
 
     // Run codespell
     public async run(options: {
-        writeChanges: boolean
+        writeChanges: boolean,
+        postFixCommand?: string
     }): Promise<ICodeSpellResult> {
 
         await this.installIfMissing();
@@ -90,10 +91,33 @@ export class CodespellRunner {
             failOnStdErr: false,
         });
 
+        // If anything was changed, run the post-fix command (if configured)
+        if (options.postFixCommand && fixedFiles.length > 0) {
+            await this.runPostFixCommand(options.postFixCommand);
+        }
+
+        // TODO: Do git detect changes
+        
         return {
             returnCode: returnCode,
             fixed: fixedFiles,
             suggestions: suggestions
         };
+    }
+
+    private async runPostFixCommand(postFixCommand: string): Promise<void> {
+        const commands = postFixCommand.split("\n").map(c => c.trim());
+        commands.forEach(async (command) => {
+            const toolName = command.split(" ").map(c => c.trim())[0];
+            if (!which(toolName)) {
+                warning(`Post-fix tool '${toolName}' not found in PATH. Skipping command.`);
+                return;
+            }
+
+            console.info(`Running post-fix command '${command}'...`);
+            const toolRunner: ToolRunner = tool(which(toolName, true));
+            toolRunner.arg(command.substring(toolName.length).trim());
+            await toolRunner.execAsync();
+        });
     }
 }
