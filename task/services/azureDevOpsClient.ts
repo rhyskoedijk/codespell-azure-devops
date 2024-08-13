@@ -10,7 +10,6 @@ export interface IFile {
 export interface IFileSuggestion extends IFile {
   lineNumber: number;
   lineText: string;
-  wordText: string;
   word: string;
   suggestions: string[];
 }
@@ -71,11 +70,10 @@ export class AzureDevOpsClient {
           const line = lines[suggestion.lineNumber - 1];
           const lineStart = line.substring(0, line.indexOf(suggestion.word));
           const lineEnd = line.substring(line.indexOf(suggestion.word) + suggestion.word.length);
-          const newWordText = `${suggestion.word} --> ${suggestion.suggestions.join("|")}`;
+          const newWordText = getWordPlaceholderTextForSuggestion(suggestion);
           const newLineText = lineStart + newWordText + lineEnd;
           if (line.indexOf(newWordText) === -1) {
             lines[suggestion.lineNumber - 1] = newLineText;
-            suggestion.wordText = newWordText;
             suggestion.lineText = '>' + newLineText; // HACK: Workaround to fix the line context for the suggestion
             fs.writeFileSync(suggestion.path, Buffer.from(lines.join("\n")));
           }
@@ -161,15 +159,18 @@ export class AzureDevOpsClient {
 
       suggestionsToComment.forEach(async (suggestion) => {
         console.info("Creating suggestion thread for:", suggestion);
-        const suggestionLineStartOffset = suggestion.lineText.indexOf(suggestion.wordText);
-        const suggestionLineEndOffset = suggestionLineStartOffset + suggestion.wordText.length;
+        const wordPlaceholderText = getWordPlaceholderTextForSuggestion(suggestion);
+        const suggestionLineContextText = suggestion.lineText.indexOf(wordPlaceholderText) !== -1 ? wordPlaceholderText : suggestion.word;
+        const suggestionLineContextStartOffset = suggestion.lineText.indexOf(suggestionLineContextText);
+        const suggestionLineContextEndOffset = suggestionLineContextStartOffset + suggestionLineContextText.length;
+        console.log("CONTEXT: ", suggestionLineContextText);
         await git.createThread({
           comments: [{
             commentType: CommentType.CodeChange,
             content: (
               `Found misspelt word \`${suggestion.word}\`.\n\n` +
               suggestion.suggestions.map(s => "```suggestion\n" + s + "\n```").join("\n") // + "\n" +
-              // TODO: commandHelpText(this.commandPrefix, suggestion)
+              // TODO: getCommandHelpText(this.commandPrefix, suggestion)
             )
           }],
           status: CommentThreadStatus.Active,
@@ -177,11 +178,11 @@ export class AzureDevOpsClient {
             filePath: normalizeDevOpsPath(suggestion.path),
             rightFileStart: {
               line: suggestion.lineNumber,
-              offset: suggestionLineStartOffset
+              offset: suggestionLineContextStartOffset
             },
             rightFileEnd: {
               line: suggestion.lineNumber,
-              offset: suggestionLineEndOffset
+              offset: suggestionLineContextEndOffset
             }
           },
           properties: {
@@ -358,7 +359,11 @@ function isThreadForSuggestion(userId: string | null, thread: GitPullRequestComm
   ) || false;
 }
 
-function commandHelpText(commandPrefix: string, suggestion: IFileSuggestion): string {
+function getWordPlaceholderTextForSuggestion(suggestion: IFileSuggestion): string {
+  return `${suggestion.word} --> ${suggestion.suggestions.join("|")}`;
+}
+
+function getCommandHelpText(commandPrefix: string, suggestion: IFileSuggestion): string {
   return [
     "<details>",
     "<summary>🛠️ Codespell commands and options</summary>",

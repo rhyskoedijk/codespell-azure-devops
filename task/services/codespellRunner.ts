@@ -57,7 +57,6 @@ export class CodespellRunner {
                         path: suggestionMatch[1].trim(),
                         lineNumber: parseInt(suggestionMatch[2]),
                         lineText: lineContext.substring(1),
-                        wordText: suggestionMatch[3].trim(),
                         word: suggestionMatch[3].trim(),
                         suggestions: suggestionMatch[4].trim().split(',').map(s => s.trim())
                     });
