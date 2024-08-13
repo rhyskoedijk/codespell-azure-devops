@@ -41,16 +41,31 @@ export class AzureDevOpsClient {
   }) {
     try {
 
-      // Commit all files which have been automatically fixed or have multiple suggestion options to pick from
-      const suggestionsWithMultipleOptions = options.suggestions?.filter(suggestion => suggestion.suggestions.length > 1);
-      const filePathsToCommit = [...new Set((options.fixedFiles || []).concat(suggestionsWithMultipleOptions || []).map(f => f.path))];
+      // Get pull request details
+      const git = await this.connection.getGitApi();
+      const pullRequest = await git.getPullRequest(this.repositoryId, options.pullRequestId, this.project);
+      if (!pullRequest) {
+        throw new Error(`Could not find pull request with ID ${options.pullRequestId}`);
+      }
+
+      // Find all active threads in the PR
+      const userId = await this.getUserId();
+      const activeThreads = (await git.getThreads(this.repositoryId, options.pullRequestId, this.project))
+        .filter(thread => !thread.isDeleted && thread.status === CommentThreadStatus.Active);
+
+      // Commit all files which have been automatically fixed or have suggestions that aren't already in an active thread
+      const fixedFilesToCommit = (options.fixedFiles || []);
+      const sugestionsToCommit = (options.suggestions || [])
+        .filter(suggestion => !activeThreads.some(thread => isThreadForSuggestion(userId, thread, suggestion)));
+      const filePathsToCommit = [...new Set(fixedFilesToCommit.concat(sugestionsToCommit).map(f => f.path))];
       if (filePathsToCommit.length === 0) {
         return;
       }
 
-      // For every suggestion with multiple options, update the line in the file to include a placeholder text with all suggestions
-      // This is required so that when we commit the changes, the file is actually changed in the PR and can then be commented on with suggestions
-      suggestionsWithMultipleOptions?.forEach(suggestion => {
+      // For every suggestion with multiple options, update the the file with a placeholder text containing all options.
+      // This is required so that when we commit the file change, the file generates a diff in the PR and can then be commented on with suggestions.
+      // If the file is not modified, the PR will not show the diff and we cannot comment on it with the suggestion later.
+      sugestionsToCommit?.filter(suggestion => suggestion.suggestions.length > 1)?.forEach(suggestion => {
         try {
           const lines = fs.readFileSync(suggestion.path).toString().split("\n");
           const line = lines[suggestion.lineNumber - 1];
@@ -69,13 +84,6 @@ export class AzureDevOpsClient {
           error(`Failed to patch local file with multiple suggestions: ${e}`);
         }
       });
-
-      // Get pull request details
-      const git = await this.connection.getGitApi();
-      const pullRequest = await git.getPullRequest(this.repositoryId, options.pullRequestId, this.project);
-      if (!pullRequest) {
-        throw new Error(`Could not find pull request with ID ${options.pullRequestId}`);
-      }
 
       // Commit local changes to the pull request source branch
       console.info("Committing suggestions for files:", filePathsToCommit);
@@ -110,18 +118,21 @@ export class AzureDevOpsClient {
     suggestions: IFileSuggestion[]
   }) {
     try {
-      const userId = await this.getUserId();
-      const git = await this.connection.getGitApi();
+
+      if (options.suggestions.length > 0) {
+        console.info(`Creating suggestion comment threads for ${options.suggestions.length} suggestion(s)...`);
+      }
 
       // Find all added or edited files paths in the PR
-      const changedFilePaths = await this.getChangedFilePathsForPullRequest(options.pullRequestId);
+      const git = await this.connection.getGitApi();
+      const changedFilePaths = await this.getChangedFilePathsForPullRequest(git, options.pullRequestId);
 
       // Find all active threads in the PR
       const activeThreads = (await git.getThreads(this.repositoryId, options.pullRequestId, this.project))
         .filter(thread => !thread.isDeleted && thread.status === CommentThreadStatus.Active);
 
       // Filter suggestions to only those that are relevant to the PR file changes and that have not been suggested yet
-      console.info(`Creating suggestion comment threads for ${options.suggestions.length} suggestion(s)...`);
+      const userId = await this.getUserId();
       const suggestionsToComment = options.suggestions.filter(suggestion => {
         const skipMessage = `Suggestion for [${suggestion.path}:${suggestion.lineNumber} ${suggestion.word}] is being skipped because`;
         if (!changedFilePaths?.some(filePath => normalizeDevOpsPath(filePath) === normalizeDevOpsPath(suggestion.path))) {
@@ -141,7 +152,7 @@ export class AzureDevOpsClient {
       activeThreads.forEach(thread => {
         const suggestion = options.suggestions.find(suggestion => isThreadForSuggestion(userId, thread, suggestion));
         if (!suggestion && thread.id) {
-          console.info(`Closing suggestion thread ${thread.id} as fixed for:`, getThreadSuggestionProperty(thread));
+          console.info(`Closing suggestion thread ${thread.id} as fixed for:`, getSuggestionFromThread(thread));
           git.updateThread({
             status: CommentThreadStatus.Fixed
           }, this.repositoryId, options.pullRequestId, thread.id, this.project);
@@ -157,8 +168,8 @@ export class AzureDevOpsClient {
             commentType: CommentType.CodeChange,
             content: (
               `Found misspelt word \`${suggestion.word}\`.\n\n` +
-              suggestion.suggestions.map(s => "```suggestion\n" + s + "\n```").join("\n") + "\n" +
-              commandHelpText(this.commandPrefix, suggestion)
+              suggestion.suggestions.map(s => "```suggestion\n" + s + "\n```").join("\n") // + "\n" +
+              // TODO: commandHelpText(this.commandPrefix, suggestion)
             )
           }],
           status: CommentThreadStatus.Active,
@@ -236,7 +247,7 @@ export class AzureDevOpsClient {
     }
 
     // Parse the suggestion info from the thread properties
-    const suggestion = getThreadSuggestionProperty(options.thread);
+    const suggestion = getSuggestionFromThread(options.thread);
     if (!suggestion) {
       return;
     }
@@ -278,8 +289,7 @@ export class AzureDevOpsClient {
     return (this.userId ||= (await this.connection.connect()).authenticatedUser?.id || null);
   }
 
-  private async getChangedFilePathsForPullRequest(pullRequestId: number): Promise<string[]> {
-    const git = await this.connection.getGitApi();
+  private async getChangedFilePathsForPullRequest(git: IGitApi, pullRequestId: number): Promise<string[]> {
     const iterations = await git.getPullRequestIterations(this.repositoryId, pullRequestId, this.project);
     const files: string[] = [];
     for (const iteration of iterations) {
@@ -322,7 +332,12 @@ function getAzureDevOpsAccessToken(): string {
   throw new Error("Failed to get Azure DevOps access token");
 }
 
-function getThreadSuggestionProperty(thread: GitPullRequestCommentThread): IFileSuggestion | null {
+function normalizeDevOpsPath(path: string): string {
+  // Convert backslashes to forward slashes and remove leading dots, this is how DevOps paths are formatted
+  return path.replace(/^\.+/g, "").replace(/\\/g, "/");
+}
+
+function getSuggestionFromThread(thread: GitPullRequestCommentThread): IFileSuggestion | null {
   const suggestion = thread.properties?.["codespell:suggestion"]?.["$value"];
   if (!suggestion) {
     return null;
@@ -330,13 +345,8 @@ function getThreadSuggestionProperty(thread: GitPullRequestCommentThread): IFile
   return JSON.parse(suggestion);
 }
 
-function normalizeDevOpsPath(path: string): string {
-  // Convert backslashes to forward slashes and remove leading dots, this is how DevOps paths are formatted
-  return path.replace(/^\.+/g, "").replace(/\\/g, "/");
-}
-
 function isThreadForSuggestion(userId: string | null, thread: GitPullRequestCommentThread, suggestion: IFileSuggestion): boolean {
-  const threadSuggestion = getThreadSuggestionProperty(thread);
+  const threadSuggestion = getSuggestionFromThread(thread);
   return (
     thread.isDeleted === false && // is not deleted
     thread.status === CommentThreadStatus.Active && // is active
