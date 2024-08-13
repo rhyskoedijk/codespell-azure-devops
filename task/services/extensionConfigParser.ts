@@ -20,6 +20,7 @@ interface ICodeSpellConfigDevOpsSection {
   "commit-suggestions": any;
   "comment-suggestions": any;
   "fail-on-misspelling": any;
+  "debug": any;
 }
 
 export function parseExtensionConfiguration(): IExtensionConfig {
@@ -57,6 +58,6 @@ export function parseExtensionConfiguration(): IExtensionConfig {
     commitSuggestions: getBoolInput("commitSuggestions", false) || (codeSpellDevOpsConfig?.["commit-suggestions"] !== undefined) || false,
     commentSuggestions: getBoolInput("commentSuggestions", false) || (codeSpellDevOpsConfig?.["comment-suggestions"] !== undefined) || false,
     failOnMisspelling: getBoolInput("failOnMisspelling", false) || (codeSpellDevOpsConfig?.["fail-on-misspelling"] !== undefined) || false,
-    debug: getVariable("System.Debug")?.toLowerCase() === "true"
+    debug: (getVariable("System.Debug")?.toLowerCase() === "true") || (codeSpellDevOpsConfig?.["debug"] !== undefined) || false
   };
 }
