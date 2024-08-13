@@ -40,21 +40,7 @@ async function run() {
             postFixCommand: config.postFixCommand
         });
 
-        // Tell the user what we found
-        const noMisspellingsFound = (codespell.suggestions.length === 0 && codespell.fixed.length === 0);
-        if (noMisspellingsFound) {
-            console.info("No misspellings found.");
-        }
-        if (codespell.fixed.length > 0) {
-            console.info(`Fixed misspellings in ${codespell.fixed.length} files:`);
-            codespell.fixed.forEach(f => console.info(` - ${f.path}`));
-        }
-        if (codespell.suggestions.length > 0) {
-            warning(`Found ${codespell.suggestions.length} misspelling(s) ${config.commitSuggestions ? "that could not be automatically corrected" : ""}:`);
-            codespell.suggestions.forEach(c => warning(` - ${c.path}:${c.lineNumber} ${c.word} ==> ${c.suggestions.join(", ")}`));
-        }
-
-        // If anything was found, commit or comment suggestions to the PR (if configured)
+        // Commit and comment on all suggestions in the PR (if configured)
         if (config.pullRequestId > 0) {
             if (config.commitSuggestions) {
                 await ado.commitSuggestionsToPullRequest({
@@ -72,6 +58,7 @@ async function run() {
         }
 
         // Report task result
+        const noMisspellingsFound = (codespell.suggestions.length === 0 && codespell.fixed.length === 0);
         setResult(
             noMisspellingsFound
                 ? TaskResult.Succeeded

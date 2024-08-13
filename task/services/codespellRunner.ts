@@ -92,11 +92,26 @@ export class CodespellRunner {
 
         // If anything was changed, run the post-fix command (if configured)
         if (options.postFixCommand && fixedFiles.length > 0) {
+            console.info("Running post-fix commands...");
             await this.runPostFixCommand(options.postFixCommand);
         }
 
-        // TODO: Do git detect changes
+        // TODO: "git diff --name-only", append to fixedFiles
         
+        // Tell the user what we found
+        const noMisspellingsFound = (suggestions.length === 0 && fixedFiles.length === 0);
+        if (noMisspellingsFound) {
+            console.info("No misspellings found.");
+        }
+        if (fixedFiles.length > 0) {
+            console.info(`Fixed misspellings in ${fixedFiles.length} files:`);
+            fixedFiles.forEach(f => console.info(` - ${f.path}`));
+        }
+        if (suggestions.length > 0) {
+            warning(`Found ${suggestions.length} misspelling(s) ${options.writeChanges ? "that could not be automatically corrected" : ""}:`);
+            suggestions.forEach(c => warning(` - ${c.path}:${c.lineNumber} ${c.word} ==> ${c.suggestions.join(", ")}`));
+        }
+
         return {
             returnCode: returnCode,
             fixed: fixedFiles,
@@ -106,17 +121,17 @@ export class CodespellRunner {
 
     private async runPostFixCommand(postFixCommand: string): Promise<void> {
         const commands = postFixCommand.split("\n").map(c => c.trim());
-        commands.forEach(async (command) => {
+        for (const command of commands) {
             const toolName = command.split(" ").map(c => c.trim())[0];
             if (!which(toolName)) {
-                warning(`Post-fix tool '${toolName}' not found in PATH. Skipping command.`);
+                warning(`Post-fix command tool \`${toolName}\` not found in PATH. Skipping command.`);
                 return;
             }
 
-            console.info(`Running post-fix command '${command}'...`);
+            console.info(`Running \`${command}\`...`);
             const toolRunner: ToolRunner = tool(which(toolName, true));
             toolRunner.arg(command.substring(toolName.length).trim());
             await toolRunner.execAsync();
-        });
+        };
     }
 }
