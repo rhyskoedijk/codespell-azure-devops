@@ -7,11 +7,17 @@ import fs from "fs";
 export interface IFile {
   path: string;
 }
+
 export interface IFileSuggestion extends IFile {
   lineNumber: number;
   lineText: string;
   word: string;
   suggestions: string[];
+}
+
+export interface IPullRequstLock {
+  wasAcquired: boolean;
+  ownerJobId?: string;
 }
 
 export class AzureDevOpsClient {
@@ -22,6 +28,7 @@ export class AzureDevOpsClient {
   private connection: azdev.WebApi;
 
   readonly commandPrefix = "@codespell";
+  readonly lockJobIdPropertyName = "Codespell.Lock.JobId";
 
   constructor(organizationUri: string, project: string, repositoryId: string) {
     this.organizationUri = organizationUri;
@@ -31,6 +38,64 @@ export class AzureDevOpsClient {
       organizationUri,
       azdev.getPersonalAccessTokenHandler(getAzureDevOpsAccessToken())
     );
+  }
+
+  public async acquireLockForPullRequest(pullRequestId: number, jobId: string): Promise<IPullRequstLock> {
+    try {
+
+      // Check if the lock is already acquired by another job
+      const git = await this.connection.getGitApi();
+      const existingProperties = await git.getPullRequestProperties(this.repositoryId, pullRequestId, this.project);
+      const existingJobId = existingProperties?.["value"]?.["Codespell.Lock.JobId"]?.["$value"];
+      if (existingJobId) {
+        return {
+          wasAcquired: (jobId === existingJobId),
+          ownerJobId: existingJobId
+        };
+      }
+
+      // Acquire the lock
+      console.info(`Acquiring lock for PR #${pullRequestId}`);
+      const patch = [
+        {
+          op: "add",
+          path: "/" + this.lockJobIdPropertyName,
+          value: jobId
+        }
+      ];
+      const newProperties = await git.updatePullRequestProperties(null, patch, this.repositoryId, pullRequestId, this.project);
+      return {
+        wasAcquired: true,
+        ownerJobId: newProperties?.["value"]?.["Codespell.Lock.JobId"]?.["$value"] || ""
+      };
+
+    }
+    catch (e) {
+      error(`Failed to check and acquire lock for pull request: ${e}`);
+      return {
+        wasAcquired: false
+      }
+    }
+  }
+
+  public async releaseLockForPullRequest(pullRequestId: number): Promise<void> {
+    try {
+
+      // Release the lock
+      console.info(`Releasing lock for PR #${pullRequestId}`);
+      const git = await this.connection.getGitApi();
+      const patch = [
+        {
+          op: "remove",
+          path: "/" + this.lockJobIdPropertyName
+        }
+      ];
+      await git.updatePullRequestProperties(null, patch, this.repositoryId, pullRequestId, this.project);
+
+    }
+    catch (e) {
+      error(`Failed to release lock for pull request: ${e}`);
+    }
   }
 
   public async commitSuggestionsToPullRequest(options: {
@@ -281,14 +346,7 @@ export class AzureDevOpsClient {
     comment: Comment
   }) {
     // TODO: Implement this...
-    //       @codespell ignore              = # codespell:ignore x
-    //       @codespell ignore this         = # codespell:ignore x
-    //       @codespell ignore word         = [codespell:ignore-words=x] 
-    //       @codespell ignore line         = # codespell:ignore
-    //       @codespell ignore file         = [codespell:skip=file]
-    //       @codespell ignore ext[ension]  = [codespell:skip=*.ext]
-    //       @codespell ignore dir[ectory]  = [codespell:skip=dir]
-    //throw new Error("Command not implemented");
+    throw new Error("Command not implemented");
   }
 
   private async getUserId(): Promise<string | null> {

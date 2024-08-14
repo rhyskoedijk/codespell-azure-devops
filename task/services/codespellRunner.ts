@@ -97,7 +97,7 @@ export class CodespellRunner {
         }
 
         // TODO: "git diff --name-only", append to fixedFiles
-        
+
         // Tell the user what we found
         const noMisspellingsFound = (suggestions.length === 0 && fixedFiles.length === 0);
         if (noMisspellingsFound) {

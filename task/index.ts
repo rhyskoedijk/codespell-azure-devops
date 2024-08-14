@@ -2,13 +2,13 @@ import { setResult, TaskResult } from "azure-pipelines-task-lib/task"
 import { debug, warning, error } from "azure-pipelines-task-lib/task"
 import { parseExtensionConfiguration } from "./services/extensionConfigParser";
 import { CodespellRunner } from "./services/codespellRunner";
-import { AzureDevOpsClient } from "./services/azureDevOpsClient";
+import { AzureDevOpsClient, IPullRequstLock } from "./services/azureDevOpsClient";
 
 async function run() {
+    const config = parseExtensionConfiguration();
+    const ado = new AzureDevOpsClient(config.organizationUri, config.project, config.repositoryId);
+    let prLock: IPullRequstLock | null = null;
     try {
-
-        const config = parseExtensionConfiguration();
-        const ado: AzureDevOpsClient = new AzureDevOpsClient(config.organizationUri, config.project, config.repositoryId);
 
         if (config.skipIfCodeSpellConfigMissing && !config.hasCodeSpellConfigFile) {
             console.info("Skipping task because '.codespellrc' configuration file is missing and 'skipIfCodeSpellConfigMissing' is set.");
@@ -17,6 +17,12 @@ async function run() {
         }
 
         if (config.pullRequestId > 0) {
+            prLock = await ado.acquireLockForPullRequest(config.pullRequestId, config.jobId);
+            if (!prLock.wasAcquired || prLock.ownerJobId !== config.jobId) {
+                console.info(`Skipping task because another instance of codespell is already running for this PR in ${prLock.ownerJobId ? "job " + prLock.ownerJobId : "another job"}.`);
+                setResult(TaskResult.Skipped, "Another instance is already running.");
+                return;
+            }
             if (config.commitSuggestions) {
                 console.info(`Suggestions will be committed directly to PR #${config.pullRequestId}.`);
             }
@@ -28,7 +34,7 @@ async function run() {
         // Process any user commands found in pull request comments (e.g. "@codespell ignore this") 
         // This ensures that `.codespellrc` is up to date before we run codespell
         if (config.pullRequestId > 0 && config.commentSuggestions) {
-            console.info("Checking PR comments for new commands that need processing...");
+            console.info("Checking PR comments for commands that need processing...");
             await ado.processUserCommandsInPullRequest({
                 pullRequestId: config.pullRequestId
             });
@@ -73,6 +79,11 @@ async function run() {
     catch (e: any) {
         error(`Unhandled exception: ${e}`);
         setResult(TaskResult.Failed, e?.message);
+    }
+    finally {
+        if (config.pullRequestId > 0 && prLock?.wasAcquired) {
+            await ado.releaseLockForPullRequest(config.pullRequestId);
+        }
     }
 }
 

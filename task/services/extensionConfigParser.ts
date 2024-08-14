@@ -7,6 +7,7 @@ export interface IExtensionConfig {
   project: string;
   repositoryId: string;
   pullRequestId: number;
+  jobId: string;
 
   hasCodeSpellConfigFile: boolean;
   skipIfCodeSpellConfigMissing: boolean;
@@ -54,6 +55,7 @@ export function parseExtensionConfiguration(): IExtensionConfig {
     project: project,
     repositoryId: repositoryId,
     pullRequestId: parseInt(getVariable("System.PullRequest.PullRequestId") || "0"),
+    jobId: getVariable("System.JobId") || "0",
 
     hasCodeSpellConfigFile: hasCodeSpellConfigFile,
     skipIfCodeSpellConfigMissing: getBoolInput("skipIfCodeSpellConfigMissing", false),
