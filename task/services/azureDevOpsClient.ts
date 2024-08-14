@@ -148,9 +148,14 @@ export class AzureDevOpsClient {
 
       // Resolve threads for suggestions that have been fixed
       activeThreads.forEach(async thread => {
-        const suggestion = options.suggestions.find(suggestion => isThreadForSuggestion(userId, thread, suggestion));
-        if (!suggestion && thread.id) {
-          console.info(`Closing suggestion thread ${thread.id} as fixed for:`, getSuggestionFromThread(thread));
+        const threadSuggestion = getSuggestionFromThread(thread);
+        if (!threadSuggestion) {
+          return; // Skip threads without a suggestion property, they're not ours
+        }
+
+        const activeSuggestion = options.suggestions.find(suggestion => isThreadForSuggestion(userId, thread, suggestion));
+        if (!activeSuggestion && thread.id) {
+          console.info(`Closing suggestion thread ${thread.id} as fixed for:`, threadSuggestion);
           await git.updateThread({
             status: CommentThreadStatus.Fixed
           }, this.repositoryId, options.pullRequestId, thread.id, this.project);

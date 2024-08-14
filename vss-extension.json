@@ -3,7 +3,7 @@
     "id": "codespell",
     "name": "Codespell",
     "description": "Fix common misspellings in your source code",
-    "version": "1.0.40",
+    "version": "1.0.41",
     "publisher": "rhyskoedijk",
     "public": false,
     "categories": [
