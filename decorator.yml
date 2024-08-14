@@ -1,6 +1,6 @@
 steps:
   # Run codespell if this run is for a pull request and the task is not already present elsewhere in the job
-- ${{ if and(ne(variables['System.PullRequest.PullRequestId'], ''), not(containsValue(job.steps.*.task.id, '9dbd2ee7-1b4d-4ac2-bd22-765dccf06d74'))) }}:
+- ${{ if and(ne(variables['skipCodespell'], 'true'), and(ne(variables['System.PullRequest.PullRequestId'], ''), not(containsValue(job.steps.*.task.id, '9dbd2ee7-1b4d-4ac2-bd22-765dccf06d74')))) }}:
   - task: codespell@1
     displayName: "Post-checkout: Codespell Checks"
     condition: succeeded()
