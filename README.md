@@ -7,7 +7,7 @@
 
 This extension runs [codespell](https://github.com/codespell-project/codespell) over your code. Any misspellings can be automatically fixed via a commit, or suggested using a pull request suggestion comment. Suggestions can reviewed and fixed directly from the pull request comment thread, without needing to push further commits. 
 
-![example](/images/example.png)
+![example](https://raw.githubusercontent.com/rhyskoedijk/codespell-azure-devops/main/images/example.png)
 
 ## Install
 
