@@ -1,0 +1,70 @@
+{
+    "manifestVersion": 1,
+    "id": "codespell",
+    "name": "Codespell",
+    "description": "Fix common misspellings in your source code",
+    "version": "1.0.43",
+    "publisher": "rhyskoedijk",
+    "public": false,
+    "categories": [
+        "Azure Pipelines"
+    ],
+    "targets": [
+        {
+            "id": "Microsoft.VisualStudio.Services"
+        }
+    ],
+    "icons": {
+        "default": "images/icon.png"
+    },
+    "links": {
+        "support": {
+            "uri": "https://github.com/rhyskoedijk/codespell-azure-devops/issues"
+        }
+    },
+    "repository": {
+        "type": "git",
+        "uri": "https://github.com/rhyskoedijk/codespell-azure-devops"
+    },
+    "content": {
+        "details": {
+            "path": "README.md"
+        }
+    },
+    "files": [
+        {
+            "path": "task"
+        },
+        {
+            "path": "decorator.yml",
+            "addressable": true,
+            "contentType": "text/plain"
+        },
+        {
+            "path": "images",
+            "addressable": true
+        }
+    ],
+    "contributions": [
+        {
+            "id": "codespell-task",
+            "type": "ms.vss-distributed-task.task",
+            "targets": [
+                "ms.vss-distributed-task.tasks"
+            ],
+            "properties": {
+                "name": "task"
+            }
+        },
+        {
+            "id": "codespell-decorator",
+            "type": "ms.azure-pipelines.pipeline-decorator",
+            "targets": [
+                "ms.azure-pipelines-agent-job.post-checkout-tasks"
+            ],
+            "properties": {
+                "template": "decorator.yml"
+            }
+        }
+    ]
+}
