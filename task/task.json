@@ -18,7 +18,7 @@
     "version": {
         "Major": 1,
         "Minor": 0,
-        "Patch": 42
+        "Patch": 43
     },
     "instanceNameFormat": "Codespell",
     "groups": [
@@ -55,7 +55,7 @@
             "type": "multiLine",
             "label": "Post-fix command(s)",
             "required": false,
-            "helpMarkDown": "Commands to run after fixing misspellings. This can be used to run code linting tools. Multiple commands can be separated by a new line."
+            "helpMarkDown": "Commands to run after fixing misspellings. This can be used to run code linting tools. if required. Multiple commands can be separated by a new line."
         },
         {
             "name": "serviceConnection",
