@@ -11,21 +11,8 @@ This extension runs [codespell](https://github.com/codespell-project/codespell) 
 
 Install the extension from the [Visual Studio marketplace](https://marketplace.visualstudio.com/items?itemName=rhyskoedijk.codespell).
 
-## Basic usage
-Set the pipeline variable `codespell` to `true` in any pipelines triggered as part of your pull request build validation. The codespell check will run immediately after source code checkout, before any build steps. 
-
-In YAML pipelines:
-```yaml
-variables:
-  - name: codespell
-    value: true
-```
-
-Then add a `.codespellrc` configuration file to the root directory of your repository. Refer to [Azure DevOps configuration file](#azure-devops-configuration-file) for more on how to configure codespell.
-
-
-## Advanced usage
-If you need more granular control over when and where codespell runs within your pipeline, you can add it as a step. It's recommended to run codespell as early as possible, ideally immediately after source code checkout to avoid doing unesscary build tasks when missepllings are found.
+## Usage
+It's recommended to run codespell in your pull request build validation pipeline(s) as early as possible, ideally immediately after source code checkout to avoid doing unesscary build tasks when missepllings are found.
 
 In YAML pipelines:
 
@@ -35,7 +22,8 @@ jobs:
   steps:
   - checkout: self
   - task: codespell@1
-  # your build tasks here...
+
+  # your other build tasks here...
 ```
 
  It is also recommended to add a `.codespellrc`  configuration file to the root directory of your repository. Refer to [Azure DevOps configuration file](#azure-devops-configuration-file) for more on how to configure codespell.
@@ -77,7 +65,7 @@ debug =
 
 Introducing spelling checks to an existing project can be distruptive if there are a lot of existing missepllings. This is a step-by-step guide on how to fix existing missepllings via a pull request and then guard against new missepllings in future pull requests.
 
-1. [Enable codespell in your build validation pipeline](#basic-usage)
+1. [Enable codespell in your pull request build validation pipeline(s)](#usage)
 1. Create a new feature branch (e.g. `/feature/codespell`)
 1. Add `.codespellrc` to `/feature/codespell` with some basic skip path rules and ignored words that you expect to encounter in your code. e.g.
     ```ini

@@ -55,16 +55,6 @@
             "properties": {
                 "name": "task"
             }
-        },
-        {
-            "id": "codespell-decorator",
-            "type": "ms.azure-pipelines.pipeline-decorator",
-            "targets": [
-                "ms.azure-pipelines-agent-job.post-checkout-tasks"
-            ],
-            "properties": {
-                "template": "decorator.yml"
-            }
         }
     ]
 }
