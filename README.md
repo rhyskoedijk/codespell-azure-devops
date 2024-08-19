@@ -5,7 +5,9 @@
     <span>Codespell Azure DevOps Extension</span>
 </h1>
 
-This extension runs [codespell](https://github.com/codespell-project/codespell) over your code. Any misspellings can be automatically fixed via a commit, or suggested using a pull request suggestion comment.
+This extension runs [codespell](https://github.com/codespell-project/codespell) over your code. Any misspellings can be automatically fixed via a commit, or suggested using a pull request suggestion comment. Suggestions can reviewed and fixed directly from the pull request comment thread, without needing to push further commits. 
+
+![example](/images/example.png)
 
 ## Install
 
@@ -26,9 +28,11 @@ jobs:
   # your other build tasks here...
 ```
 
- It is also recommended to add a `.codespellrc`  configuration file to the root directory of your repository. Refer to [Azure DevOps configuration file](#azure-devops-configuration-file) for more on how to configure codespell.
+**The identity used to run codespell must have "Contribute" permission to the repository.**
 
-Task configuration options set within the pipeline override any config options in `.codespellrc`.
+If no service connection or access token is specified in the task input, the "Project Collection Build Service" identity will be used to commit and comment on pull requests, which requires that the "Allow scripts to access the OAuth token" option be enabled on the pipeline.
+
+It is recommended to add a `.codespellrc`  configuration file to the root directory of your repository. Refer to [Azure DevOps configuration file](#azure-devops-configuration-file) for more on how to configure codespell. If a config option is specified in both `.codespellrc` **and** the task inputs, the task input value takes priority.
 
 ## Azure DevOps configuration file
 In addition to all built-in [codespell configuration file options](https://github.com/codespell-project/codespell?tab=readme-ov-file#using-a-config-file), these additional configuration are supported by this extension:
@@ -102,4 +106,4 @@ Introducing spelling checks to an existing project can be distruptive if there a
     comment-suggestions = 
     fail-on-misspelling = 
     ```
-1. Merge the pull request, with all misspellings now resolved.
+1. Merge the pull request, with all misspellings now resolved; New pull requests will misspellings will block merge until the comment suggestions are resolved.
