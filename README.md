@@ -1,6 +1,6 @@
 <h1>
     <picture>
-        <img src="images/icon.png" alt="Codespell" width="30" height="30" />
+        <img src="https://raw.githubusercontent.com/rhyskoedijk/codespell-azure-devops/main/images/icon.png" alt="Codespell" width="30" height="30" />
     </picture>
     <span>Codespell Azure DevOps Extension</span>
 </h1>
@@ -10,8 +10,6 @@ This extension runs [codespell](https://github.com/codespell-project/codespell) 
 ## Install
 
 Install the extension from the [Visual Studio marketplace](https://marketplace.visualstudio.com/items?itemName=rhyskoedijk.codespell).
-
-## Usage
 
 ## Basic usage
 Set the pipeline variable `codespell` to `true` in any pipelines triggered as part of your pull request build validation. The codespell check will run immediately after source code checkout, before any build steps. 
@@ -79,7 +77,7 @@ debug =
 
 Introducing spelling checks to an existing project can be distruptive if there are a lot of existing missepllings. This is a step-by-step guide on how to fix existing missepllings via a pull request and then guard against new missepllings in future pull requests.
 
-1. [Enable codespell in your build validation pipeline](#usage)
+1. [Enable codespell in your build validation pipeline](#basic-usage)
 1. Create a new feature branch (e.g. `/feature/codespell`)
 1. Add `.codespellrc` to `/feature/codespell` with some basic skip path rules and ignored words that you expect to encounter in your code. e.g.
     ```ini
