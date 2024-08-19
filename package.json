@@ -1,6 +1,6 @@
 {
   "name": "codespell-azure-devops",
-  "version": "1.0.45",
+  "version": "1.0.46",
   "description": "Codespell Azure DevOps Extension",
   "main": "task/index.js",
   "scripts": {
