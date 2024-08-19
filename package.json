@@ -2,15 +2,25 @@
   "name": "codespell-azure-devops",
   "version": "1.0.0",
   "description": "Codespell Azure DevOps Extension",
-  "main": "index.js",
+  "main": "task/index.js",
   "scripts": {
-    "build": "npm install && tsc && cp -r node_modules task/node_modules",
-    "package": "npx tfx-cli extension create --manifest-globs vss-extension.json --rev-version",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "cp -r node_modules task/node_modules && tsc",
+    "package": "npx tfx-cli extension create --manifest-globs vss-extension.json"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "codespell",
+    "azure",
+    "devops",
+    "spellcheck",
+    "spelling",
+    "spell"
+  ],
+  "author": "Rhys Koedijk",
+  "license": "MIT",
+  "homepage": "https://github.com/rhyskoedijk/codespell-azure-devops#readme",
+  "bugs": {
+    "url": "https://github.com/rhyskoedijk/codespell-azure-devops/issues"
+  },
   "dependencies": {
     "@types/ini": "^4.1.1",
     "azure-devops-node-api": "^14.0.2",

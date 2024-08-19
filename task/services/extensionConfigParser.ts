@@ -10,10 +10,11 @@ export interface IExtensionConfig {
   jobId: string;
 
   hasCodeSpellConfigFile: boolean;
-  skipIfCodeSpellConfigMissing: boolean;
+  
   commitSuggestions: boolean;
   commentSuggestions: boolean;
   postFixCommand?: string;
+  skipIfCodeSpellConfigMissing: boolean;
   failOnMisspelling: boolean;
   debug: boolean;
 }
@@ -58,11 +59,12 @@ export function parseExtensionConfiguration(): IExtensionConfig {
     jobId: getVariable("System.JobId") || "0",
 
     hasCodeSpellConfigFile: hasCodeSpellConfigFile,
-    skipIfCodeSpellConfigMissing: getBoolInput("skipIfCodeSpellConfigMissing", false),
+
     commitSuggestions: getBoolInput("commitSuggestions", false) || (codeSpellDevOpsConfig?.["commit-suggestions"] !== undefined) || false,
     commentSuggestions: getBoolInput("commentSuggestions", false) || (codeSpellDevOpsConfig?.["comment-suggestions"] !== undefined) || false,
-    failOnMisspelling: getBoolInput("failOnMisspelling", false) || (codeSpellDevOpsConfig?.["fail-on-misspelling"] !== undefined) || false,
     postFixCommand: getInput("postFixCommand") || codeSpellDevOpsConfig?.["post-fix-command"],
+    skipIfCodeSpellConfigMissing: getBoolInput("skipIfCodeSpellConfigMissing", false),
+    failOnMisspelling: getBoolInput("failOnMisspelling", false) || (codeSpellDevOpsConfig?.["fail-on-misspelling"] !== undefined) || false,
     debug: (getVariable("System.Debug")?.toLowerCase() === "true") || (codeSpellDevOpsConfig?.["debug"] !== undefined) || false
   };
 }
