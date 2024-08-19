@@ -1,6 +1,6 @@
-<h1 align="center" style="display:flex; align-items:top; gap:1rem">
+<h1>
     <picture>
-        <img src="images/icon.png" alt="Dependabot" width="32" />
+        <img src="images/icon.png" alt="Codespell" width="30" height="30" />
     </picture>
     <span>Codespell Azure DevOps Extension</span>
 </h1>
@@ -55,16 +55,20 @@ In addition to all built-in [codespell configuration file options](https://githu
 [devops]
 ; These options are specific to the Azure DevOps extension and have no effect if codespell is run manually.
 
-; When misspellings are found, suggested fixes will be committed directly to the source branch of the pull request associated with the run. This setting is ignored if the pipeline run is not in the context of a pull request.
+; When misspellings are found, suggested fixes will be committed directly to the source branch of the pull request associated with the run.
+; This setting is ignored if the pipeline run is not in the context of a pull request.
 commit-suggestions = 
 
-; When misspellings are found, suggested fixes will be added as comments to the pull request associated with the run. This setting is ignored if the pipeline run is not in the context of a pull request.
+; When misspellings are found, suggested fixes will be added as comments to the pull request associated with the run.
+; This setting is ignored if the pipeline run is not in the context of a pull request.
 comment-suggestions = 
 
-; Additional command(s) to run after fixing misspellings. This can be used to run code linting tools, if required.
+; Additional command(s) to run after fixing misspellings.
+; This can be used to run code linting tools, if required.
 post-fix-command = 
 
-; When misspellings are found, the pipeline will fail with error "X misspellings found". By default, misspellings are raised as warnings only.
+; When misspellings are found, the pipeline will fail with error "X misspellings found".
+; By default, misspellings are raised as warnings only.
 fail-on-misspelling = 
 
 ; Log additional information to assist with debugging
@@ -75,26 +79,41 @@ debug =
 
 Introducing spelling checks to an existing project can be distruptive if there are a lot of existing missepllings. This is a step-by-step guide on how to fix existing missepllings via a pull request and then guard against new missepllings in future pull requests.
 
-### Enable codespell in your build validation pipeline
-...
+1. [Enable codespell in your build validation pipeline](#usage)
+1. Create a new feature branch (e.g. `/feature/codespell`)
+1. Add `.codespellrc` to `/feature/codespell` with some basic skip path rules and ignored words that you expect to encounter in your code. e.g.
+    ```ini
+    [codespell]
+    hard-encoding-detection = 
+    skip = bin,obj,lib,node_modules,fonts,*.pdf,*.png,*.css
+    ignore-words-list = 
+    
+    [devops]
+    fail-on-misspelling = 
+    debug = 
+    ```
+1. Create a pull request for `/feature/codespell` and wait for build validation pipelines to trigger codespell
+1. Review the codespell warnings and refine your "skip" and "ignore-words-list" configuration until only legitimate misspellings remain
+1. Edit `.codespellrc`; Enable "commit-suggestions" and "comment-suggestions"
+    ```ini
+    [codespell]
+    ; your final codespell goes config here...
 
-### Create a new feature branch
-...
+    [devops]
+    commit-suggestions = ; this will commit fixes for misspellings that can be automatically resolved
+    comment-suggestions = ; this will add suggestion comments for misspellings that have multiple options and require manual intervention
+    fail-on-misspelling = 
+    debug = 
+    ```
+1. Wait for build validation pipelines to re-run, codespell will push a commit and comment on the pull request with all remaining suggestions that cannot be auto-resolved
+1. Manually review and apply suggestions for all remaining misspellings
+1. Edit `.codespellrc`; Disable "commit-suggestions" and "debug" so that going forward, all suggestions are raised as pull request comments only
+    ```ini
+    [codespell]
+    ; your final codespell goes config here...
 
-### Create the initial `.codespellrc` config file
-...
-
-### Run codespell in "warning only" mode
-...
-
-### Refine your skip and ignore rules
-...
-
-### Run codespell in "commit and comment" mode
-...
-
-### Apply suggestions
-...
-
-### Merge the pull request
-...
+    [devops]
+    comment-suggestions = 
+    fail-on-misspelling = 
+    ```
+1. Merge the pull request, with all misspellings now resolved.
