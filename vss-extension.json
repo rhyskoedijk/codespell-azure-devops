@@ -3,9 +3,9 @@
     "id": "codespell",
     "name": "Codespell",
     "description": "Fix common misspellings in your source code",
-    "version": "1.0.43",
+    "version": "1.0.44",
     "publisher": "rhyskoedijk",
-    "public": false,
+    "public": true,
     "categories": [
         "Azure Pipelines"
     ],
