@@ -35,9 +35,17 @@
     ],
     "inputs": [
         {
+            "name": "failOnMisspelling",
+            "type": "boolean",
+            "label": "Fail if misspellings are found",
+            "defaultValue": false,
+            "required": false,
+            "helpMarkDown": "Fail the task if misspellings are found"
+        },
+        {
             "name": "commitSuggestions",
             "type": "boolean",
-            "label": "Commit suggestions",
+            "label": "Commit suggestions for misspellings directly to source branch",
             "defaultValue": false,
             "required": false,
             "helpMarkDown": "If `true`, when misspellings are found, suggested fixes will be committed directly to the source branch of the pull request associated with the run. If `false`, no commits will be made. If this pipeline is not run in the context of a pull request, this setting will be ignored."
@@ -45,7 +53,7 @@
         {
             "name": "commentSuggestions",
             "type": "boolean",
-            "label": "Comment suggestions",
+            "label": "Comment suggestions for misspellings on pull request",
             "defaultValue": false,
             "required": false,
             "helpMarkDown": "If `true`, when misspellings are found, suggested fixes will be added as comments to the pull request associated with the run. If `false`, no comments will be added. If this pipeline is not run in the context of a pull request, this setting will be ignored."
@@ -81,14 +89,6 @@
             "defaultValue": false,
             "required": false,
             "helpMarkDown": "Skip the task if codespell is not configured for the repository (i.e. `.codespellrc` does not exist)"
-        },
-        {
-            "name": "failOnMisspelling",
-            "type": "boolean",
-            "label": "Fail if codespell misspellings are found",
-            "defaultValue": false,
-            "required": false,
-            "helpMarkDown": "Fail the task if codespell misspellings are found"
         }
     ],
     "execution": {

@@ -5,7 +5,7 @@
     <span>Codespell Azure DevOps Extension</span>
 </h1>
 
-This extension runs [codespell](https://github.com/codespell-project/codespell) over your code. Any misspellings can be automatically fixed via a commit, or suggested using a pull request suggestion comment. Suggestions can reviewed and fixed directly from the pull request comment thread, without needing to push further commits. 
+This extension runs [codespell](https://github.com/codespell-project/codespell) over your code. Any misspellings are automatically fixed via a commit or suggested using a pull request suggestion comment. Suggestions can reviewed and fixed directly from the pull request comment thread, without needing to push further commits. 
 
 ![example](https://raw.githubusercontent.com/rhyskoedijk/codespell-azure-devops/main/images/example.png)
 
@@ -14,23 +14,20 @@ This extension runs [codespell](https://github.com/codespell-project/codespell) 
 Install the extension from the [Visual Studio marketplace](https://marketplace.visualstudio.com/items?itemName=rhyskoedijk.codespell).
 
 ## Usage
-It's recommended to run codespell in your pull request build validation pipeline(s) as early as possible, ideally immediately after source code checkout to avoid doing unesscary build tasks when missepllings are found.
+If you are including codespell in to an existing build validation pipeline, it's recommended to run it as early as possible, ideally immediately after source code checkout to avoid doing unesscary build tasks when missepllings are found.
 
 In YAML pipelines:
 
 ```yaml
 jobs:
-- job: build
+- job: codespell
   steps:
-  - checkout: self
   - task: codespell@1
-
-  # your other build tasks here...
 ```
 
-**The identity used to run codespell must have "Contribute" permission to the repository.**
+**The identity used to run codespell must have "Contribute" permission to the repository. By default, this is the "Project Collection Build Service" identity unless a custom identity is specified in the task inputs.**
 
-If no service connection or access token is specified in the task input, the "Project Collection Build Service" identity will be used to commit and comment on pull requests, which requires that the "Allow scripts to access the OAuth token" option be enabled on the pipeline.
+When using Classic Pipelines, the "Allow scripts to access the OAuth token" option must be enabled on the pipeline unless a custom identity is used.
 
 It is recommended to add a `.codespellrc`  configuration file to the root directory of your repository. Refer to [Azure DevOps configuration file](#azure-devops-configuration-file) for more on how to configure codespell. If a config option is specified in both `.codespellrc` **and** the task inputs, the task input value takes priority.
 
@@ -69,9 +66,9 @@ debug =
 
 Introducing spelling checks to an existing project can be distruptive if there are a lot of existing missepllings. This is a step-by-step guide on how to fix existing missepllings via a pull request and then guard against new missepllings in future pull requests.
 
-1. [Enable codespell in your pull request build validation pipeline(s)](#usage)
 1. Create a new feature branch (e.g. `/feature/codespell`)
-1. Add `.codespellrc` to `/feature/codespell` with some basic skip path rules and ignored words that you expect to encounter in your code. e.g.
+1. [Enable codespell in your pull request build validation pipeline(s)](#usage) for `/feature/codespell`
+1. Add a `.codespellrc` file to the root of `/feature/codespell` with some initial skip path rules and ignored words that you expect to encounter in your code. e.g.
     ```ini
     [codespell]
     hard-encoding-detection = 
