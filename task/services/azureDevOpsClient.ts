@@ -233,7 +233,6 @@ export class AzureDevOpsClient {
         const suggestionLineContextText = suggestion.lineText.indexOf(wordPlaceholderText) !== -1 ? wordPlaceholderText : suggestion.word;
         const suggestionLineContextStartOffset = suggestion.lineText.indexOf(suggestionLineContextText);
         const suggestionLineContextEndOffset = suggestionLineContextStartOffset + suggestionLineContextText.length;
-        console.log("CONTEXT: ", suggestionLineContextText);
         await git.createThread({
           comments: [{
             commentType: CommentType.CodeChange,
