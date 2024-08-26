@@ -231,8 +231,8 @@ export class AzureDevOpsClient {
             commentType: CommentType.CodeChange,
             content: (
               `Found misspelt word \`${suggestion.word}\`.\n\n` +
-              suggestion.suggestions.map(s => "```suggestion\n" + s + "\n```").join("\n") // + "\n" +
-              // TODO: getCommandHelpText(this.commandPrefix, suggestion)
+              suggestion.suggestions.map(s => "```suggestion\n" + s + "\n```").join("\n") + "\n" +
+              this.commandProcessor.getCommandHelpTextFor(suggestion)
             )
           }],
           status: CommentThreadStatus.Active,
