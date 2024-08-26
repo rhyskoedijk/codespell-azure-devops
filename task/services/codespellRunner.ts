@@ -95,7 +95,10 @@ export class CodespellRunner {
             await this.runPostFixCommand(options.postFixCommand);
         }
 
-        // TODO: "git diff --name-only", append to fixedFiles
+        // Include any locally modified files in the list of fixed files
+        // These could be from the post-fix command or from comment commands
+        const modifiedFiles = await this.getModifiedFilePaths();
+        fixedFiles.push(...modifiedFiles.map(f => ({ path: f })));
 
         // Tell the user what we found
         const noMisspellingsFound = (suggestions.length === 0 && fixedFiles.length === 0);
@@ -118,13 +121,14 @@ export class CodespellRunner {
         };
     }
 
+    // Run post-fix commands
     private async runPostFixCommand(postFixCommand: string): Promise<void> {
         const commands = postFixCommand.split("\n").map(c => c.trim());
         for (const command of commands) {
             const toolName = command.split(" ").map(c => c.trim())[0];
             if (!which(toolName)) {
                 warning(`Post-fix command tool \`${toolName}\` not found in PATH. Skipping command.`);
-                return;
+                continue;
             }
 
             console.info(`Running \`${command}\`...`);
@@ -132,5 +136,15 @@ export class CodespellRunner {
             toolRunner.arg(command.substring(toolName.length).trim());
             await toolRunner.execAsync();
         };
+    }
+
+    // Get locally modified file paths
+    private async getModifiedFilePaths(): Promise<string[]> {
+        const git: ToolRunner = tool(which("git", true));
+        git.arg(["diff", "--name-only"]);
+        const result = await git.execSync();
+        return (result.code === 0)
+            ? result.stdout.split('\n').map(p => p.trim()).filter(p => p.length > 0)
+            : [];
     }
 }
