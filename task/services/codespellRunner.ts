@@ -1,7 +1,7 @@
 import { debug, warning, error } from "azure-pipelines-task-lib/task"
 import { which, tool } from "azure-pipelines-task-lib/task"
 import { ToolRunner } from "azure-pipelines-task-lib/toolrunner"
-import { IFile, IFileSuggestion } from "./azureDevOpsClient";
+import { IFile, IFileSuggestion } from "./types";
 
 export interface ICodeSpellResult {
     returnCode: number;

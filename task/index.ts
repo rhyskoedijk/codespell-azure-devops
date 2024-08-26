@@ -35,7 +35,7 @@ async function run() {
         // This ensures that `.codespellrc` is up to date before we run codespell
         if (config.pullRequestId > 0 && config.commentSuggestions) {
             console.info("Checking PR comments for commands that need processing...");
-            await ado.processUserCommandsInPullRequest({
+            await ado.processCommandsInCommentsForPullRequest({
                 pullRequestId: config.pullRequestId
             });
         }

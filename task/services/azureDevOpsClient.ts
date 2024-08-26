@@ -2,18 +2,9 @@ import * as azdev from "azure-devops-node-api";
 import { debug, warning, error, getEndpointAuthorizationParameter, getInput } from "azure-pipelines-task-lib/task"
 import { GitPullRequestCommentThread, Comment, CommentThreadStatus, CommentType, VersionControlChangeType, ItemContentType } from "azure-devops-node-api/interfaces/GitInterfaces";
 import { IGitApi } from "azure-devops-node-api/GitApi";
+import { IFile, IFileSuggestion } from "./types";
+import { CodespellCommandProcessor } from "./codespellCommandProcessor";
 import fs from "fs";
-
-export interface IFile {
-  path: string;
-}
-
-export interface IFileSuggestion extends IFile {
-  lineNumber: number;
-  lineText: string;
-  word: string;
-  suggestions: string[];
-}
 
 export interface IPullRequstLock {
   wasAcquired: boolean;
@@ -26,8 +17,8 @@ export class AzureDevOpsClient {
   private repositoryId: string;
   private userId: string | null = null;
   private connection: azdev.WebApi;
+  private commandProcessor: CodespellCommandProcessor;
 
-  readonly commandPrefix = "@codespell";
   readonly lockJobIdPropertyName = "Codespell.Lock.JobId";
 
   constructor(organizationUri: string, project: string, repositoryId: string) {
@@ -36,8 +27,9 @@ export class AzureDevOpsClient {
     this.repositoryId = repositoryId;
     this.connection = new azdev.WebApi(
       organizationUri,
-      azdev.getPersonalAccessTokenHandler(getAzureDevOpsAccessToken())
+      azdev.getPersonalAccessTokenHandler(this.getAccessToken())
     );
+    this.commandProcessor = new CodespellCommandProcessor();
   }
 
   public async acquireLockForPullRequest(pullRequestId: number, jobId: string): Promise<IPullRequstLock> {
@@ -120,7 +112,7 @@ export class AzureDevOpsClient {
       // Commit all files which have been automatically fixed or have suggestions that aren't already in an active thread
       const fixedFilesToCommit = (options.fixedFiles || []);
       const sugestionsToCommit = (options.suggestions || [])
-        .filter(suggestion => !activeThreads.some(thread => isThreadForSuggestion(userId, thread, suggestion)));
+        .filter(suggestion => !activeThreads.some(thread => this.isThreadForSuggestion(userId, thread, suggestion)));
       const filePathsToCommit = [...new Set(fixedFilesToCommit.concat(sugestionsToCommit).map(f => f.path))];
       if (filePathsToCommit.length === 0) {
         return;
@@ -202,7 +194,7 @@ export class AzureDevOpsClient {
           console.info(skipMessage, 'it is not in the changed files list for the pull request.');
           return false;
         }
-        else if (activeThreads.some(thread => isThreadForSuggestion(userId, thread, suggestion))) {
+        else if (activeThreads.some(thread => this.isThreadForSuggestion(userId, thread, suggestion))) {
           console.info(skipMessage, 'it already has an active suggestion thread in the pull request.');
           return false;
         }
@@ -213,12 +205,12 @@ export class AzureDevOpsClient {
 
       // Resolve threads for suggestions that have been fixed
       activeThreads.forEach(async thread => {
-        const threadSuggestion = getSuggestionFromThread(thread);
+        const threadSuggestion = this.getSuggestionFromThread(thread);
         if (!threadSuggestion) {
           return; // Skip threads without a suggestion property, they're not ours
         }
 
-        const activeSuggestion = options.suggestions.find(suggestion => isThreadForSuggestion(userId, thread, suggestion));
+        const activeSuggestion = options.suggestions.find(suggestion => this.isThreadForSuggestion(userId, thread, suggestion));
         if (!activeSuggestion && thread.id) {
           console.info(`Closing suggestion thread ${thread.id} as fixed for:`, threadSuggestion);
           await git.updateThread({
@@ -270,87 +262,51 @@ export class AzureDevOpsClient {
     }
   }
 
-  public async processUserCommandsInPullRequest(options: {
+  public async processCommandsInCommentsForPullRequest(options: {
     pullRequestId: number
   }) {
     try {
       const git = await this.connection.getGitApi();
+      const userId = await this.getUserId();
+
+      // Process all [active] threads in the pull request
       await git.getThreads(this.repositoryId, options.pullRequestId, this.project).then(async (threads) => {
         const activeThreads = threads.filter(t => !t.isDeleted && t.status == CommentThreadStatus.Active);
         activeThreads.forEach(thread => {
+
+          // If the thread is not for a suggestion, ignore it
+          const suggestion = this.getSuggestionFromThread(thread);
+          if (!suggestion) {
+            return;
+          }
+
+          // Process all comments in the thread
           thread.comments?.forEach(async (comment) => {
-            await this.processUserCommandInComment(git, {
+
+            // If the comment was already reacted to by our user, skip it
+            if (comment.usersLiked?.some(user => user.id === userId)) {
+              return;
+            }
+
+            // Process all commands in the comment, if any
+            let commandsWereProcessed = await this.commandProcessor.processCommands({
               pullRequestId: options.pullRequestId,
               thread: thread,
-              comment: comment
+              comment: comment,
+              suggestion: suggestion
             });
+            
+            // If any commands were processed, react to the comment so that we don't process it again
+            if (commandsWereProcessed && thread.id && comment.id) {
+              await git.createLike(this.repositoryId, options.pullRequestId, thread.id, comment.id, this.project);
+            }
           });
-
         });
       });
-
     }
     catch (e) {
       error(`Failed to process user commands in pull request: ${e}`);
     }
-  }
-
-  private async processUserCommandInComment(git: IGitApi, options: {
-    pullRequestId: number,
-    thread: GitPullRequestCommentThread,
-    comment: Comment
-  }) {
-    // If the comment doesn't have a command prefix, ignore it
-    if (!options.comment.content?.startsWith(this.commandPrefix)) {
-      return;
-    }
-
-    // If the comment was already reacted to by our user, ignore it
-    const userId = await this.getUserId();
-    if (options.comment.usersLiked?.some(user => user.id === userId)) {
-      return;
-    }
-
-    // Parse the command
-    const command: string[] = options.comment.content.substr(this.commandPrefix.length).trim().split(" ").map(c => c.trim().toLocaleLowerCase());
-    if (command.length === 0) {
-      return;
-    }
-
-    // Parse the suggestion info from the thread properties
-    const suggestion = getSuggestionFromThread(options.thread);
-    if (!suggestion) {
-      return;
-    }
-
-    console.info(`Processing command '${command.join(" ")}' for suggestion:`, suggestion);
-    switch (command[0]) {
-      case "ignore":
-        const ignoreTarget = command.length > 1 ? command[1] : "this";
-        await this.processIgnoreCommand(git, ignoreTarget, options);
-        break;
-      default:
-        warning(`Unknown command '${command[0]}'`);
-        break;
-    }
-
-    // React to the comment so that we don't process it again
-    if (options.thread.id && options.comment.id) {
-      await git.createLike(this.repositoryId, options.pullRequestId, options.thread.id, options.comment.id, this.project);
-    }
-  }
-
-  private async processIgnoreCommand(git: IGitApi, ignoreTarget: string, options: {
-    pullRequestId: number,
-    thread: GitPullRequestCommentThread,
-    comment: Comment
-  }) {
-    // TODO: Implement this...
-    throw new Error("Command not implemented");
-  }
-
-  private async getUserId(): Promise<string | null> {
-    return (this.userId ||= (await this.connection.connect()).authenticatedUser?.id || null);
   }
 
   private async getChangedFilePathsForPullRequest(git: IGitApi, pullRequestId: number): Promise<string[]> {
@@ -369,31 +325,56 @@ export class AzureDevOpsClient {
 
     return [...new Set(files)];
   }
-}
 
-function getAzureDevOpsAccessToken(): string {
-  const accessToken = getInput("accessToken");
-  if (accessToken) {
-    debug("Using user-supplied access token for authentication");
-    return accessToken;
-  }
-
-  const serviceConnectionName = getInput("serviceConnection");
-  if (serviceConnectionName) {
-    var serviceConnectionToken = getEndpointAuthorizationParameter(serviceConnectionName, "apitoken", false);
-    if (serviceConnectionToken) {
-      debug("Using user-supplied service connection for authentication");
-      return serviceConnectionToken;
+  private getSuggestionFromThread(thread: GitPullRequestCommentThread): IFileSuggestion | null {
+    const suggestion = thread.properties?.["codespell:suggestion"]?.["$value"];
+    if (!suggestion) {
+      return null;
     }
+    return JSON.parse(suggestion);
+  }
+  
+  private isThreadForSuggestion(userId: string | null, thread: GitPullRequestCommentThread, suggestion: IFileSuggestion): boolean {
+    const threadSuggestion = this.getSuggestionFromThread(thread);
+    return (
+      thread.isDeleted === false && // is not deleted
+      thread.status === CommentThreadStatus.Active && // is active
+      thread.comments?.some(comment => comment.author?.id === userId) && // has a comment from our user id
+      threadSuggestion && // has a codespell suggestion property
+      threadSuggestion.path === suggestion.path && // is for the same file
+      threadSuggestion.lineNumber === suggestion.lineNumber && // is for the same line
+      threadSuggestion.word === suggestion.word // is for the same word
+    ) || false;
+  }
+  
+  private async getUserId(): Promise<string> {
+    return (this.userId ||= (await this.connection.connect()).authenticatedUser?.id || "");
   }
 
-  const systemAccessToken = getEndpointAuthorizationParameter("SystemVssConnection", "AccessToken", false);
-  if (systemAccessToken) {
-    debug("Using SystemVssConnection's access token for authentication");
-    return systemAccessToken;
+  private getAccessToken(): string {
+    const accessToken = getInput("accessToken");
+    if (accessToken) {
+      debug("Using user-supplied access token for authentication");
+      return accessToken;
+    }
+  
+    const serviceConnectionName = getInput("serviceConnection");
+    if (serviceConnectionName) {
+      var serviceConnectionToken = getEndpointAuthorizationParameter(serviceConnectionName, "apitoken", false);
+      if (serviceConnectionToken) {
+        debug("Using user-supplied service connection for authentication");
+        return serviceConnectionToken;
+      }
+    }
+  
+    const systemAccessToken = getEndpointAuthorizationParameter("SystemVssConnection", "AccessToken", false);
+    if (systemAccessToken) {
+      debug("Using SystemVssConnection's access token for authentication");
+      return systemAccessToken;
+    }
+  
+    throw new Error("Failed to get Azure DevOps access token");
   }
-
-  throw new Error("Failed to get Azure DevOps access token");
 }
 
 function normalizeDevOpsPath(path: string): string {
@@ -401,45 +382,6 @@ function normalizeDevOpsPath(path: string): string {
   return path.replace(/^\.+/g, "").replace(/\\/g, "/");
 }
 
-function getSuggestionFromThread(thread: GitPullRequestCommentThread): IFileSuggestion | null {
-  const suggestion = thread.properties?.["codespell:suggestion"]?.["$value"];
-  if (!suggestion) {
-    return null;
-  }
-  return JSON.parse(suggestion);
-}
-
-function isThreadForSuggestion(userId: string | null, thread: GitPullRequestCommentThread, suggestion: IFileSuggestion): boolean {
-  const threadSuggestion = getSuggestionFromThread(thread);
-  return (
-    thread.isDeleted === false && // is not deleted
-    thread.status === CommentThreadStatus.Active && // is active
-    thread.comments?.some(comment => comment.author?.id === userId) && // has a comment from our user id
-    threadSuggestion && // has a codespell suggestion property
-    threadSuggestion.path === suggestion.path && // is for the same file
-    threadSuggestion.lineNumber === suggestion.lineNumber && // is for the same line
-    threadSuggestion.word === suggestion.word // is for the same word
-  ) || false;
-}
-
 function getWordPlaceholderTextForSuggestion(suggestion: IFileSuggestion): string {
   return `${suggestion.word} --> ${suggestion.suggestions.join("|")}`;
-}
-
-function getCommandHelpText(commandPrefix: string, suggestion: IFileSuggestion): string {
-  return [
-    "<details>",
-    "<summary>🛠️ Codespell commands and options</summary>",
-    "",
-    "You can trigger Codespell actions by replying to this comment with any of the following commands:",
-    " - `" + commandPrefix + " ignore this` will ignore this single misspelling instance using an inline code comment",
-    " - `" + commandPrefix + " ignore word` will ignore all misspellings of `" + suggestion.word + "` by adding it to the ignored words list",
-    " - `" + commandPrefix + " ignore line` will ignore all misspellings on line " + suggestion.lineNumber + " using an inline code comment",
-    " - `" + commandPrefix + " ignore file` will add `" + suggestion.path + "` to the ignored files list",
-    " - `" + commandPrefix + " ignore ext` will add `*." + suggestion.path.split(".").pop() + "` to the ignored files list",
-    " - `" + commandPrefix + " ignore dir` will add `" + suggestion.path.split("/").splice(0, -1).join("/") + "/*` to the ignored files list",
-    " - `" + commandPrefix + " ignore <pattern>` will add a custom file path pattern to the ignored files list",
-    "",
-    "</details>"
-  ].join("\n");
 }
