@@ -142,6 +142,8 @@ export class AzureDevOpsClient {
 
       // Commit local changes to the pull request source branch
       console.info("Committing suggestions for files:", filePathsToCommit);
+      const changedFilePaths = await this.getChangedFilePathsForPullRequest(git, options.pullRequestId);
+
       await git.createPush({
         refUpdates: [{
           name: pullRequest.sourceRefName,
@@ -150,7 +152,7 @@ export class AzureDevOpsClient {
         commits: [{
           comment: "Codespell corrections",
           changes: filePathsToCommit.map(path => ({
-            changeType: VersionControlChangeType.Edit,
+            changeType: changedFilePaths.includes(normalizeDevOpsPath(path)) ? VersionControlChangeType.Edit : VersionControlChangeType.Add,
             item: {
               path: normalizeDevOpsPath(path)
             },
@@ -190,7 +192,7 @@ export class AzureDevOpsClient {
       const userId = await this.getUserId();
       const suggestionsToComment = options.suggestions.filter(suggestion => {
         const skipMessage = `Suggestion for [${suggestion.path}:${suggestion.lineNumber} ${suggestion.word}] is being skipped because`;
-        if (!changedFilePaths?.some(filePath => normalizeDevOpsPath(filePath) === normalizeDevOpsPath(suggestion.path))) {
+        if (!changedFilePaths.includes(normalizeDevOpsPath(suggestion.path))) {
           console.info(skipMessage, 'it is not in the changed files list for the pull request.');
           return false;
         }
@@ -273,13 +275,13 @@ export class AzureDevOpsClient {
       await git.getThreads(this.repositoryId, options.pullRequestId, this.project).then(async (threads) => {
         const activeThreads = threads.filter(t => !t.isDeleted && t.status == CommentThreadStatus.Active);
         activeThreads.forEach(thread => {
-
+          
           // If the thread is not for a suggestion, ignore it
           const suggestion = this.getSuggestionFromThread(thread);
           if (!suggestion) {
             return;
           }
-
+          
           // Process all comments in the thread
           thread.comments?.forEach(async (comment) => {
 
@@ -322,8 +324,7 @@ export class AzureDevOpsClient {
         files.push(...iterationFiles);
       }
     }
-
-    return [...new Set(files)];
+    return [...new Set(files.map(f => normalizeDevOpsPath(f)))];
   }
 
   private getSuggestionFromThread(thread: GitPullRequestCommentThread): IFileSuggestion | null {
@@ -378,8 +379,8 @@ export class AzureDevOpsClient {
 }
 
 function normalizeDevOpsPath(path: string): string {
-  // Convert backslashes to forward slashes and remove leading dots, this is how DevOps paths are formatted
-  return path.replace(/^\.+/g, "").replace(/\\/g, "/");
+  // Convert backslashes to forward slashes, convert './' => '/' and ensure the path starts with a forward slash if it doesn't already, this is how DevOps paths are formatted
+  return path.replace(/\\/g, "/").replace(/^\.\//, "/").replace(/^([^/])/, "/$1");
 }
 
 function getWordPlaceholderTextForSuggestion(suggestion: IFileSuggestion): string {

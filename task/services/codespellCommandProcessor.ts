@@ -2,9 +2,12 @@ import { GitPullRequestCommentThread, Comment } from "azure-devops-node-api/inte
 import { IFile, IFileSuggestion } from "./types";
 import { warning, error } from "azure-pipelines-task-lib/task"
 import fs from "fs";
+import ini from "ini";
+import path from "path";
 
 export class CodespellCommandProcessor {
 
+  readonly configFilePath = ".codespellrc";
   readonly commandPrefix = "@codespell";
 
   public getCommandHelpTextFor(suggestion: IFileSuggestion): string {
@@ -18,7 +21,7 @@ export class CodespellCommandProcessor {
       " - `" + this.commandPrefix + " ignore word` will add `" + suggestion.word + "` to the global ignored words list",
       " - `" + this.commandPrefix + " ignore file` will add `" + suggestion.path + "` to the global ignored files list",
       " - `" + this.commandPrefix + " ignore file-type` will add `*." + suggestion.path.split(".").pop() + "` to the global ignored files list",
-      " - `" + this.commandPrefix + " ignore dir` will add `" + suggestion.path.split("/").splice(0, -1).join("/") + "/*` to the global ignored files list",
+      " - `" + this.commandPrefix + " ignore dir` will add `" + suggestion.path.split(path.sep).splice(0, -1).join(path.sep) + path.sep + "*` to the global ignored files list",
       " - `" + this.commandPrefix + " ignore <pattern>` will add a custom file path pattern to the global ignored files list",
       "",
       "After commenting, re-queue your codespell pipeline to process the command change.",
@@ -69,40 +72,68 @@ export class CodespellCommandProcessor {
 
       case "this":
         // Ignore this single misspelling instance using an inline code comment
-        await patchFileWithInlineComment(options.suggestion.path, options.suggestion.lineNumber, options.suggestion.word);
-        break;
+        return patchFileWithInlineComment(options.suggestion.path, options.suggestion.lineNumber, options.suggestion.word);
 
       case "line":
         // Ignore all misspellings on line X using an inline code comment
-        await patchFileWithInlineComment(options.suggestion.path, options.suggestion.lineNumber);
-        break;
+        return patchFileWithInlineComment(options.suggestion.path, options.suggestion.lineNumber);
 
       case "word":
         // Add the word to the global ignored words list
-        break;
+        return patchCodespellConfig(this.configFilePath, null, options.suggestion.word);
 
       case "file":
         // Add the file to the global ignored files list
-        break;
+        return patchCodespellConfig(this.configFilePath, options.suggestion.path, null);
 
       case "file-type":
         // Add the file type to the global ignored files list
-        break;
+        return patchCodespellConfig(this.configFilePath, `*.${options.suggestion.path.split(".").pop()}`, null);
 
       case "dir":
         // Add the directory to the global ignored files list
-        break;
+        return patchCodespellConfig(this.configFilePath, `${options.suggestion.path.split(path.sep).splice(0, -1).join(path.sep)}${path.sep}*`, null);
 
       default:
         // Add a custom file path pattern to the global ignored files list
-        break;
-
+        return patchCodespellConfig(this.configFilePath, ignoreTarget, null);
     }
+  }
+}
+
+ function patchCodespellConfig(configPath: string, addSkipPattern: string | null = null, addIgnoreWord: string | null = null) : boolean {
+  try {
+    const codeSpellConfigIni = fs.existsSync(configPath) ? ini.parse(fs.readFileSync(configPath, "utf-8")) : null;
+    const codeSpellIniSection = codeSpellConfigIni?.codespell;
+    if (!codeSpellConfigIni) {
+      throw new Error("Config file not found or not a valid INI file");
+    }
+    if (addSkipPattern)
+    {
+      codeSpellIniSection["skip"] = (codeSpellIniSection["skip"] || '')
+        .split(',')
+        .filter((s: string) => s.trim().length > 0)
+        .concat(addSkipPattern)
+        .join(',');
+    }
+    if (addIgnoreWord)
+    {
+      codeSpellIniSection["ignore-words-list"] = (codeSpellIniSection["ignore-words-list"] || '')
+        .split(',')
+        .filter((s: string) => s.trim().length > 0)
+        .concat(addIgnoreWord)
+        .join(',');
+    }
+    fs.writeFileSync(configPath, ini.stringify(codeSpellConfigIni));
+    return true;
+  }
+  catch (e) {
+    error(`Failed to patch ${configPath}: ${e}`);
     return false;
   }
 }
 
-async function patchFileWithInlineComment(filePath: string, lineNumber: number, word: string | null = null) {
+function patchFileWithInlineComment(filePath: string, lineNumber: number, word: string | null = null) : boolean {
   try {
     const lines = fs.readFileSync(filePath).toString().split("\n");
     const line = lines[lineNumber - 1];
@@ -116,9 +147,11 @@ async function patchFileWithInlineComment(filePath: string, lineNumber: number, 
     const newLineText = `${line} ${codespellIgnoreComment}`;
     lines[lineNumber - 1] = newLineText;
     fs.writeFileSync(filePath, Buffer.from(lines.join("\n")));
+    return true;
   }
   catch (e) {
-    error(`Failed to patch local file with multiple suggestions: ${e}`);
+    error(`Failed to patch local file with inline comment: ${e}`);
+    return false;
   }
 }
 
@@ -181,7 +214,6 @@ function getCodeCommentDelimiters(filePath: string): { start: string; end: strin
     'coffee': { start: '#', end: null }, // CoffeeScript
     'clj': { start: ';', end: null }, // Clojure
     'cljs': { start: ';', end: null }, // ClojureScript
-    'edn': { start: ';', end: null }, // EDN (Clojure data format)
     'jsonc': { start: '//', end: null }, // JSON with comments
     'yaml': { start: '#', end: null },
     'yml': { start: '#', end: null },
