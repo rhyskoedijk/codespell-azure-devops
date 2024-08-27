@@ -134,7 +134,9 @@ export class CodespellRunner {
             console.info(`Running \`${command}\`...`);
             const toolRunner: ToolRunner = tool(which(toolName, true));
             toolRunner.arg(command.substring(toolName.length).trim());
-            await toolRunner.execAsync();
+            await toolRunner.execAsync({
+                silent: !this.debug
+            });
         };
     }
 
@@ -142,7 +144,9 @@ export class CodespellRunner {
     private async getModifiedFilePaths(): Promise<string[]> {
         const git: ToolRunner = tool(which("git", true));
         git.arg(["diff", "--name-only"]);
-        const result = await git.execSync();
+        const result = await git.execSync({
+            silent: !this.debug
+        });
         return (result.code === 0)
             ? result.stdout.split('\n').map(p => p.trim()).filter(p => p.length > 0)
             : [];
