@@ -23,8 +23,9 @@ export class CodespellRunner {
         }
 
         debug("Codespell was not found, installing via `pip install`...");
-        const pipRunner: ToolRunner = tool(which("pip", true));
-        pipRunner.arg(["install", "codespell", "chardet"]);
+        const pipRunner: ToolRunner = tool(which("pip", true)).arg([
+            "install", "codespell", "chardet"
+        ]);
         pipRunner.execSync({
             silent: !this.debug
         });
@@ -142,8 +143,9 @@ export class CodespellRunner {
 
     // Get locally modified file paths
     private async getModifiedFilePaths(): Promise<string[]> {
-        const git: ToolRunner = tool(which("git", true));
-        git.arg(["diff", "--name-only"]);
+        const git: ToolRunner = tool(which("git", true)).arg([
+            "diff", "--name-only", "--ignore-cr-at-eol", "--ignore-space-at-eol"
+        ]);
         const result = await git.execSync({
             silent: !this.debug
         });
