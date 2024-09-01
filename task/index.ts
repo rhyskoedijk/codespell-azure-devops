@@ -51,7 +51,7 @@ async function run() {
             if (config.commitSuggestions) {
                 await ado.commitSuggestionsToPullRequest({
                     pullRequestId: config.pullRequestId,
-                    fixedFiles: codespell.fixed,
+                    files: [...new Set([...codespell.fixed, ...codespell.modified])],
                     suggestions: config.commentSuggestions ? codespell.suggestions : []
                 });
             }
@@ -64,7 +64,7 @@ async function run() {
         }
 
         // Report task result
-        const noMisspellingsFound = (codespell.suggestions.length === 0 && codespell.fixed.length === 0);
+        const noMisspellingsFound = (codespell.suggestions.length === 0);
         setResult(
             noMisspellingsFound
                 ? TaskResult.Succeeded

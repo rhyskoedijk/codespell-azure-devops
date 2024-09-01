@@ -5,8 +5,9 @@ import { IFile, IFileSuggestion } from "./types";
 
 export interface ICodeSpellResult {
     returnCode: number;
-    fixed: IFile[];
-    suggestions: IFileSuggestion[];
+    modified: IFile[];                  // auto-modified by post-fix commands
+    fixed: IFile[];                     // auto-fixed by codespell
+    suggestions: IFileSuggestion[];     // manual fixes are needed
 }
 
 export class CodespellRunner {
@@ -98,8 +99,7 @@ export class CodespellRunner {
 
         // Include any locally modified files in the list of fixed files
         // These could be from the post-fix command or from comment commands
-        const modifiedFiles = await this.getModifiedFilePaths();
-        fixedFiles.push(...modifiedFiles.map(f => ({ path: f })));
+        const modifiedFiles: IFile[] = (await this.getModifiedFilePaths()).map(f => ({ path: f }));
 
         // Tell the user what we found
         const noMisspellingsFound = (suggestions.length === 0 && fixedFiles.length === 0);
@@ -117,6 +117,7 @@ export class CodespellRunner {
 
         return {
             returnCode: returnCode,
+            modified: modifiedFiles,
             fixed: fixedFiles,
             suggestions: suggestions
         };

@@ -92,7 +92,7 @@ export class AzureDevOpsClient {
 
   public async commitSuggestionsToPullRequest(options: {
     pullRequestId: number,
-    fixedFiles: IFile[],
+    files: IFile[],
     suggestions: IFileSuggestion[]
   }) {
     try {
@@ -110,10 +110,10 @@ export class AzureDevOpsClient {
         .filter(thread => !thread.isDeleted && thread.status === CommentThreadStatus.Active);
 
       // Commit all files which have been automatically fixed or have suggestions that aren't already in an active thread
-      const fixedFilesToCommit = (options.fixedFiles || []);
+      const filesToCommit = (options.files || []);
       const sugestionsToCommit = (options.suggestions || [])
         .filter(suggestion => !activeThreads.some(thread => this.isThreadForSuggestion(userId, thread, suggestion)));
-      const filePathsToCommit = [...new Set(fixedFilesToCommit.concat(sugestionsToCommit).map(f => f.path))];
+      const filePathsToCommit = [...new Set(filesToCommit.concat(sugestionsToCommit).map(f => f.path))];
       if (filePathsToCommit.length === 0) {
         return;
       }
