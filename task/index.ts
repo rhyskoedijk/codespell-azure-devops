@@ -63,6 +63,9 @@ async function run() {
             }
         }
 
+        // TODO: Set pull request status for "Codespell check succeeded"
+        // https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-statuses/create?view=azure-devops-rest-7.1&tabs=HTTP
+        
         // Report task result
         const noMisspellingsFound = (codespell.suggestions.length === 0);
         setResult(
