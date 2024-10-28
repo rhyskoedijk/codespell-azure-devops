@@ -5,7 +5,7 @@
     <span>Codespell Azure DevOps Extension</span>
 </h1>
 
-This extension runs [codespell](https://github.com/codespell-project/codespell) over your code. Any misspellings are automatically fixed via a commit or suggested using a pull request suggestion comment. Suggestions can reviewed and fixed directly from the pull request comment thread, without needing to push further commits. 
+Unoffical Azure DevOps extension for [codespell](https://github.com/codespell-project/codespell). Misspellings are automatically fixed via a pull request commit or suggestion comment. Suggestions can reviewed and fixed directly from the pull request comment thread, without needing to manually push fix commits. 
 
 ![example](https://raw.githubusercontent.com/rhyskoedijk/codespell-azure-devops/main/images/example.png)
 
