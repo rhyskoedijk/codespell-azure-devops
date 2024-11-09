@@ -1,4 +1,4 @@
-**/node_modules
-**/*.js
-**/*.vsix
-**/.taskkey
+dist
+node_modules
+task/**/*.js
+*.taskkey

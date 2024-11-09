@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "dependencies": {
+    "azure-devops-node-api": "^14.1.0",
+    "azure-pipelines-task-lib": "^4.17.3",
+    "ini": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/ini": "^4.1.1"
+  }
+}

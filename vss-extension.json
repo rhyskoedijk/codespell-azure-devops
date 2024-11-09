@@ -1,60 +1,87 @@
 {
-    "manifestVersion": 1,
-    "id": "codespell",
-    "name": "Codespell",
-    "description": "Code spellcheck. Automatically fix common misspellings in your source code",
-    "version": "1.1.1",
-    "publisher": "rhyskoedijk",
-    "public": true,
-    "categories": [
-        "Azure Pipelines"
-    ],
-    "targets": [
-        {
-            "id": "Microsoft.VisualStudio.Services"
-        }
-    ],
-    "icons": {
-        "default": "images/icon.png"
+  "manifestVersion": 1,
+  "publisher": "rhyskoedijk",
+  "id": "codespell-local",
+  "name": "Codespell [LOCALHOST]",
+  "description": "Code spellcheck. Automatically fix common misspellings in your source code",
+  "version": "0.0.0.0",
+  "public": false,
+  "scopes": ["vso.build"],
+  "targets": [
+    {
+      "id": "Microsoft.VisualStudio.Services"
+    }
+  ],
+  "categories": ["Azure Pipelines"],
+  "tags": ["codespell", "spell", "spelling", "spellcheck", "misspelling", "typo"],
+  "icons": {
+    "default": "images/icon.png"
+  },
+  "screenshots": [
+    {
+      "path": "images/example.pr.suggestion.png"
+    }
+  ],
+  "links": {
+    "home": {
+      "uri": "https://github.com/rhyskoedijk/codespell-azure-devops"
     },
-    "links": {
-        "support": {
-            "uri": "https://github.com/rhyskoedijk/codespell-azure-devops/issues"
-        }
+    "getstarted": {
+      "uri": "https://github.com/rhyskoedijk/codespell-azure-devops?tab=readme-ov-file#usage"
     },
-    "repository": {
-        "type": "git",
-        "uri": "https://github.com/rhyskoedijk/codespell-azure-devops"
+    "issues": {
+      "uri": "https://github.com/rhyskoedijk/codespell-azure-devops/issues"
     },
-    "content": {
-        "details": {
-            "path": "README.md"
-        }
+    "support": {
+      "uri": "https://github.com/rhyskoedijk/codespell-azure-devops/issues"
     },
-    "files": [
-        {
-            "path": "task"
-        },
-        {
-            "path": "decorator.yml",
-            "addressable": true,
-            "contentType": "text/plain"
-        },
-        {
-            "path": "images",
-            "addressable": true
-        }
-    ],
-    "contributions": [
-        {
-            "id": "codespell-task",
-            "type": "ms.vss-distributed-task.task",
-            "targets": [
-                "ms.vss-distributed-task.tasks"
-            ],
-            "properties": {
-                "name": "task"
-            }
-        }
-    ]
+    "license": {
+      "uri": "https://github.com/rhyskoedijk/codespell-azure-devops/LICENSE"
+    }
+  },
+  "customerQnASupport": {
+    "enablemarketplaceqna": true,
+    "url": "https://github.com/rhyskoedijk/codespell-azure-devops/discussions"
+  },
+  "repository": {
+    "type": "git",
+    "uri": "https://github.com/rhyskoedijk/codespell-azure-devops"
+  },
+  "content": {
+    "details": {
+      "path": "README.md"
+    }
+  },
+  "files": [
+    {
+      "path": "task/task.json"
+    },
+    {
+      "path": "task/index.js"
+    },
+    {
+      "path": "task/utils"
+    },
+    {
+      "path": "task/node_modules"
+    },
+    {
+      "path": "task/icon.png"
+    },
+    {
+      "path": "images",
+      "addressable": true
+    }
+  ],
+  "contributions": [
+    {
+      "id": "codespell-task",
+      "type": "ms.vss-distributed-task.task",
+      "description": "Codespell Task",
+      "targets": ["ms.vss-distributed-task.tasks"],
+      "properties": {
+        "name": "task"
+      }
+    }
+  ]
 }

@@ -1,19 +1,26 @@
 {
   "name": "codespell-azure-devops",
-  "version": "1.1.1",
+  "version": "1.0.0",
   "description": "Codespell Azure DevOps Extension",
-  "main": "task/index.js",
   "scripts": {
-    "build": "cp -r node_modules task/node_modules && tsc",
-    "package": "npx tfx-cli extension create --manifest-globs vss-extension.json"
+    "prepare": "husky",
+    "postinstall": "npm --prefix task install",
+    "format": "prettier --write '**/*.{js,ts,json,yaml,yml,md}'",
+    "format:check": "prettier --check '**/*.{js,ts,json,yaml,yml,md}'",
+    "build": "tsc -p task",
+    "package": "node vss-extension.version.increment.js && npx tfx-cli extension create --manifests vss-extension.json --output-path dist",
+    "package:dev": "npx tfx-cli extension create --manifests vss-extension.json --output-path dist/dev --overrides-file vss-extension.overrides.dev.json",
+    "package:prod": "npx tfx-cli extension create --manifests vss-extension.json --output-path dist/prod --overrides-file vss-extension.overrides.prod.json"
   },
   "keywords": [
-    "codespell",
     "azure",
     "devops",
-    "spellcheck",
+    "codespell",
+    "spell",
     "spelling",
-    "spell"
+    "spellcheck",
+    "misspelling",
+    "typo"
   ],
   "author": "Rhys Koedijk",
   "license": "MIT",
@@ -21,16 +28,13 @@
   "bugs": {
     "url": "https://github.com/rhyskoedijk/codespell-azure-devops/issues"
   },
-  "dependencies": {
-    "@types/ini": "^4.1.1",
-    "azure-devops-node-api": "^14.1.0",
-    "azure-pipelines-task-lib": "^4.17.3",
-    "ini": "^5.0.0"
-  },
   "devDependencies": {
     "@types/mocha": "^10.0.9",
     "@types/node": "^22.9.0",
     "@types/q": "^1.5.8",
-    "sync-request": "^6.1.0"
+    "husky": "^9.1.6",
+    "prettier": "3.3.3",
+    "prettier-plugin-organize-imports": "4.1.0",
+    "pretty-quick": "^4.0.0"
   }
 }

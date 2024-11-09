@@ -1,0 +1,7 @@
+{
+  "id": "codespell",
+  "name": "Codespell",
+  "version": "#{MAJOR_MINOR_PATCH}#.#{BUILD_NUMBER}#",
+  "public": true,
+  "baseUri": null
+}
