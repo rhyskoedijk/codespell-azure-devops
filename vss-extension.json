@@ -6,7 +6,6 @@
   "description": "Code spellcheck. Automatically fix common misspellings in your source code",
   "version": "0.0.0.0",
   "public": false,
-  "scopes": ["vso.build"],
   "targets": [
     {
       "id": "Microsoft.VisualStudio.Services"
