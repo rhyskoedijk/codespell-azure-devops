@@ -151,6 +151,7 @@ export class AzureDevOpsClient {
       // Commit local changes to the pull request source branch
       console.info('Committing suggestions for files:', filePathsToCommit);
       const changedFilePaths = await this.getChangedFilePathsForPullRequest(git, options.pullRequestId);
+      console.log(changedFilePaths);
 
       await git.createPush(
         {
@@ -164,9 +165,7 @@ export class AzureDevOpsClient {
             {
               comment: 'Codespell corrections',
               changes: filePathsToCommit.map((path) => ({
-                changeType: changedFilePaths.includes(normalizeDevOpsPath(path))
-                  ? VersionControlChangeType.Edit
-                  : VersionControlChangeType.Add,
+                changeType: VersionControlChangeType.Edit,
                 item: {
                   path: normalizeDevOpsPath(path),
                 },
