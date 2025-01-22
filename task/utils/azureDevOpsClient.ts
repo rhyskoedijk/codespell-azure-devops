@@ -69,6 +69,7 @@ export class AzureDevOpsClient {
         ownerJobId: newProperties?.['value']?.['Codespell.Lock.JobId']?.['$value'] || '',
       };
     } catch (e) {
+      console.debug(e); // Dump the error stack trace to help with debugging
       error(`Failed to check and acquire lock for pull request: ${e}`);
       return {
         wasAcquired: false,
@@ -89,6 +90,7 @@ export class AzureDevOpsClient {
       ];
       await git.updatePullRequestProperties(null, patch, this.repositoryId, pullRequestId, this.project);
     } catch (e) {
+      console.debug(e); // Dump the error stack trace to help with debugging
       error(`Failed to release lock for pull request: ${e}`);
     }
   }
@@ -141,6 +143,7 @@ export class AzureDevOpsClient {
               fs.writeFileSync(suggestion.path, Buffer.from(lines.join('\n')));
             }
           } catch (e) {
+            console.debug(e); // Dump the error stack trace to help with debugging
             throw new Error(`Failed to patch local file with multiple suggestions: ${e}`);
           }
         });
@@ -179,6 +182,7 @@ export class AzureDevOpsClient {
         this.project,
       );
     } catch (e) {
+      console.debug(e); // Dump the error stack trace to help with debugging
       throw new Error(`Failed to commit codespell suggestions to pull request: ${e}`);
     }
   }
@@ -281,6 +285,7 @@ export class AzureDevOpsClient {
         );
       });
     } catch (e) {
+      console.debug(e); // Dump the error stack trace to help with debugging
       throw new Error(`Failed to comment codespell suggestions on pull request: ${e}`);
     }
   }
@@ -323,6 +328,7 @@ export class AzureDevOpsClient {
         });
       });
     } catch (e) {
+      console.debug(e); // Dump the error stack trace to help with debugging
       throw new Error(`Failed to process user commands in pull request: ${e}`);
     }
   }

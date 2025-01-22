@@ -157,6 +157,7 @@ function patchCodespellConfig(
     fs.writeFileSync(configPath, ini.stringify(codeSpellConfigIni));
     return true;
   } catch (e) {
+    console.debug(e); // Dump the error stack trace to help with debugging
     error(`Failed to patch ${configPath}: ${e}`);
     return false;
   }
@@ -179,6 +180,7 @@ function patchFileWithInlineComment(filePath: string, lineNumber: number, word: 
     fs.writeFileSync(filePath, Buffer.from(lines.join('\n')));
     return true;
   } catch (e) {
+    console.debug(e); // Dump the error stack trace to help with debugging
     error(`Failed to patch local file with inline comment: ${e}`);
     return false;
   }

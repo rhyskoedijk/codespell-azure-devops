@@ -79,6 +79,7 @@ async function run() {
       noMisspellingsFound ? 'No misspellings found.' : `Found ${codespell.suggestions.length} misspelling(s).`,
     );
   } catch (e: any) {
+    console.debug(e); // Dump the error stack trace to help with debugging
     error(`Unhandled exception: ${e}`);
     setResult(TaskResult.Failed, e?.message);
   } finally {
