@@ -141,7 +141,7 @@ export class AzureDevOpsClient {
               fs.writeFileSync(suggestion.path, Buffer.from(lines.join('\n')));
             }
           } catch (e) {
-            error(`Failed to patch local file with multiple suggestions: ${e}`);
+            throw new Error(`Failed to patch local file with multiple suggestions: ${e}`);
           }
         });
 
@@ -179,7 +179,7 @@ export class AzureDevOpsClient {
         this.project,
       );
     } catch (e) {
-      error(`Failed to commit codespell suggestions to pull request: ${e}`);
+      throw new Error(`Failed to commit codespell suggestions to pull request: ${e}`);
     }
   }
 
@@ -281,7 +281,7 @@ export class AzureDevOpsClient {
         );
       });
     } catch (e) {
-      error(`Failed to comment codespell suggestions on pull request: ${e}`);
+      throw new Error(`Failed to comment codespell suggestions on pull request: ${e}`);
     }
   }
 
@@ -323,7 +323,7 @@ export class AzureDevOpsClient {
         });
       });
     } catch (e) {
-      error(`Failed to process user commands in pull request: ${e}`);
+      throw new Error(`Failed to process user commands in pull request: ${e}`);
     }
   }
 
