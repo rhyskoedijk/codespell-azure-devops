@@ -1,3 +1,5 @@
+import path from 'path';
+
 import { debug, error, tool, warning, which } from 'azure-pipelines-task-lib/task';
 import { ToolRunner } from 'azure-pipelines-task-lib/toolrunner';
 import { IFile, IFileSuggestion } from './types';
@@ -72,7 +74,7 @@ export class CodespellRunner {
           const fixedFileMatch = line.match(/FIXED\: (.*)/i);
           if (fixedFileMatch) {
             fixedFiles.push({
-              path: fixedFileMatch[1].trim(),
+              path: path.normalize(fixedFileMatch[1]).trim(),
             });
           }
           const warningMatch = line.match(/WARNING\: (.*)/i);
@@ -162,6 +164,7 @@ export class CodespellRunner {
           .split('\n')
           .map((p) => p.trim())
           .filter((p) => p.length > 0)
+          .map((p) => path.normalize(p))
       : [];
   }
 }
