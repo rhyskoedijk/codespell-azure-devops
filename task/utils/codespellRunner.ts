@@ -96,14 +96,12 @@ export class CodespellRunner {
     });
 
     // If anything was changed, run the post-fix command (if configured)
+    const modifiedFiles: IFile[] = [];
     if (options.postFixCommand && fixedFiles.length > 0) {
       console.info('Running post-fix commands...');
       await this.runPostFixCommand(options.postFixCommand);
+      modifiedFiles.push(...(await this.getModifiedFilePaths()).map((f) => ({ path: f })));
     }
-
-    // Include any locally modified files in the list of fixed files
-    // These could be from the post-fix command or from comment commands
-    const modifiedFiles: IFile[] = (await this.getModifiedFilePaths()).map((f) => ({ path: f }));
 
     // Tell the user what we found
     const noMisspellingsFound = suggestions.length === 0 && fixedFiles.length === 0;
