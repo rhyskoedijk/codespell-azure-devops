@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.15.3",
+    "@types/node": "^22.15.17",
     "@types/q": "^1.5.8",
     "husky": "^9.1.7",
     "prettier": "3.5.3",
