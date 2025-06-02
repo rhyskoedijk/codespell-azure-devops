@@ -1,7 +1,7 @@
 {
   "private": true,
   "dependencies": {
-    "azure-devops-node-api": "^14.1.0",
+    "azure-devops-node-api": "^15.1.0",
     "azure-pipelines-task-lib": "^5.2.0",
     "ini": "^5.0.0"
   },
